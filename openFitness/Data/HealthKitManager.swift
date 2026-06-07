@@ -1299,6 +1299,29 @@ extension WorkoutItem {
         case "Elliptical": return "figure.elliptical"
         case "Rowing": return "figure.rower"
         case "Stair Climbing": return "figure.stair.stepper"
+        case "Climbing": return "figure.climbing"
+        case "Dance": return "figure.dance"
+        case "Tennis": return "figure.tennis"
+        case "Soccer": return "figure.soccer"
+        case "Basketball": return "figure.basketball"
+        case "Boxing", "Kickboxing": return "figure.boxing"
+        case "Golf": return "figure.golf"
+        case "Snowboarding": return "figure.snowboarding"
+        case "Skiing": return "figure.skiing.downhill"
+        case "Surfing": return "figure.surfing"
+        case "Stretching": return "figure.flexibility"
+        case "Martial Arts": return "figure.martial.arts"
+        case "Cooldown": return "figure.cooldown"
+        case "Mixed Cardio": return "figure.mixed.cardio"
+        case "Barre": return "figure.barre"
+        case "Pickleball", "Badminton", "Squash", "Table Tennis": return "figure.racket"
+        case "Volleyball": return "figure.volleyball"
+        case "Bowling": return "figure.bowling"
+        case "Sailing": return "figure.sailing"
+        case "Skating": return "figure.skating"
+        case "Fitness Gaming": return "gamecontroller"
+        case "Gymnastics": return "figure.gymnastics"
+        case "Handball": return "figure.handball"
         default:
             return "figure.cross.training"
         }
@@ -1313,8 +1336,17 @@ extension WorkoutItem {
         case "Strength Training", "Traditional Strength": return Color(red: 0.96, green: 0.86, blue: 0.60) // Gold
         case "Yoga", "Pilates": return Color(red: 0.75, green: 0.66, blue: 0.86) // Lavender
         case "Hiking": return Color(red: 0.82, green: 0.72, blue: 0.65) // Soft Brown
+        case "Climbing": return Color(red: 0.85, green: 0.55, blue: 0.35) // Clay/Brown
+        case "Rowing": return Color(red: 0.38, green: 0.65, blue: 0.85) // Sky Blue
+        case "Elliptical": return Color(red: 0.65, green: 0.75, blue: 0.85) // Steel Blue
+        case "Dance": return Color(red: 0.95, green: 0.45, blue: 0.65) // Pink
+        case "Tennis", "Pickleball", "Badminton", "Squash", "Table Tennis": return Color(red: 0.65, green: 0.95, blue: 0.35) // Neon Yellow/Green
+        case "Boxing", "Kickboxing": return Color(red: 0.95, green: 0.35, blue: 0.35) // Red
+        case "Golf": return Color(red: 0.35, green: 0.85, blue: 0.35) // Forest Green
+        case "Snowboarding", "Skiing": return Color(red: 0.90, green: 0.95, blue: 1.0) // Soft White/Blue
+        case "Surfing", "Sailing": return Color(red: 0.23, green: 0.51, blue: 0.96) // Soothing Blue
         default:
-            return Color(red: 0.94, green: 0.68, blue: 0.78) // Pink
+            return Color(red: 0.94, green: 0.68, blue: 0.78) // Pink/Default
         }
     }
 }

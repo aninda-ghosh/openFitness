@@ -1461,11 +1461,11 @@ struct WorkoutPatternCard: View {
                                             .frame(width: geo.size.width * CGFloat(breakdown.high / totalMins))
                                     }
                                     if breakdown.moderate > 0 {
-                                        Color.orange
+                                        Theme.Colors.recoveryHigh
                                             .frame(width: geo.size.width * CGFloat(breakdown.moderate / totalMins))
                                     }
                                     if breakdown.low > 0 {
-                                        Theme.Colors.recoveryHigh
+                                        Theme.Colors.sleepDeep
                                             .frame(width: geo.size.width * CGFloat(breakdown.low / totalMins))
                                     }
                                 }
@@ -1478,10 +1478,10 @@ struct WorkoutPatternCard: View {
                                     WorkoutIntensityLegend(name: "High", color: Theme.Colors.strainHigh)
                                 }
                                 if breakdown.moderate > 0 {
-                                    WorkoutIntensityLegend(name: "Mod", color: .orange)
+                                    WorkoutIntensityLegend(name: "Mod", color: Theme.Colors.recoveryHigh)
                                 }
                                 if breakdown.low > 0 {
-                                    WorkoutIntensityLegend(name: "Low", color: Theme.Colors.recoveryHigh)
+                                    WorkoutIntensityLegend(name: "Low", color: Theme.Colors.sleepDeep)
                                 }
                             }
                         }

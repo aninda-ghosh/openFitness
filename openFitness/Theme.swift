@@ -8,20 +8,20 @@ struct Theme {
         static let cardBackground = Color(red: 0.13, green: 0.13, blue: 0.13) // Solid dark gray
         static let border = Color.white.opacity(0.03) // Deep gray stroke
         
-        // Recovery (Neon Yellow-Green / Teal / Neon Orange)
-        static let recoveryHigh = Color(red: 0.78, green: 0.96, blue: 0.15)    // Neon Lime Green (#C8F525)
-        static let recoveryMid = Color(red: 0.23, green: 0.79, blue: 0.74)     // Bright Teal
-        static let recoveryLow = Color(red: 0.96, green: 0.53, blue: 0.09)     // Neon Orange
+        // Recovery (Vibrant Emerald / Gold / Rich Crimson)
+        static let recoveryHigh = Color(red: 0.06, green: 0.73, blue: 0.51)    // Emerald Green (#10B981)
+        static let recoveryMid = Color(red: 0.96, green: 0.62, blue: 0.04)     // Warm Gold (#F59E0B)
+        static let recoveryLow = Color(red: 0.94, green: 0.27, blue: 0.27)     // Rich Crimson (#EF4444)
         
         // Strain
-        static let strainHigh = Color(red: 0.96, green: 0.53, blue: 0.09)      // Neon Orange
-        static let strainLow = Color(red: 0.96, green: 0.53, blue: 0.09).opacity(0.6)
+        static let strainHigh = Color(red: 1.00, green: 0.34, blue: 0.13)      // Electric Coral Red-Orange (#FF5722)
+        static let strainLow = Color(red: 1.00, green: 0.54, blue: 0.40)      // Muted Coral (#FF8A65)
         
         // Sleep
-        static let sleepDeep = Color(red: 0.23, green: 0.79, blue: 0.74)       // Bright Teal
-        static let sleepREM = Color(red: 0.23, green: 0.79, blue: 0.74).opacity(0.7)
-        static let sleepLight = Color(red: 0.78, green: 0.96, blue: 0.15)      // Neon Lime Green
-        static let sleepAwake = Color(red: 0.96, green: 0.53, blue: 0.09)      // Neon Orange
+        static let sleepDeep = Color(red: 0.39, green: 0.40, blue: 0.95)       // Deep Indigo (#6366F1)
+        static let sleepREM = Color(red: 0.55, green: 0.36, blue: 0.96)        // Electric Violet (#8B5CF6)
+        static let sleepLight = Color(red: 0.23, green: 0.51, blue: 0.96)      // Soothing Sky Blue (#3B82F6)
+        static let sleepAwake = Color(red: 0.98, green: 0.45, blue: 0.09)      // Sunset Orange (#F97316)
     }
     
     // MARK: - Typography (Rounded Sans-Serif)

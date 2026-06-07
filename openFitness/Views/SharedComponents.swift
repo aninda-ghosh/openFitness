@@ -488,16 +488,21 @@ struct CustomLineGraph: View {
                 .frame(height: 1)
                 .padding(.horizontal, 2)
             
-            // X-Axis Labels (Supports Multiline Texts)
+            // X-Axis Labels (Relative layout utilizing fixedSize to prevent wrapping)
             HStack(spacing: 0) {
                 ForEach(0..<labels.count, id: \.self) { index in
-                    Text(labels[index])
-                        .font(Theme.Typography.roundedFont(size: 9, weight: .bold))
-                        .foregroundColor(.white.opacity(0.45))
-                        .multilineTextAlignment(.center)
-                        .lineLimit(nil)
-                        .minimumScaleFactor(0.8)
-                        .frame(maxWidth: .infinity)
+                    let labelText = labels[index]
+                    if !labelText.isEmpty {
+                        Text(labelText)
+                            .font(Theme.Typography.roundedFont(size: 9, weight: .bold))
+                            .foregroundColor(.white.opacity(0.45))
+                            .lineLimit(1)
+                            .fixedSize(horizontal: true, vertical: false)
+                            .frame(maxWidth: .infinity)
+                    } else {
+                        Color.clear
+                            .frame(maxWidth: .infinity)
+                    }
                 }
             }
         }

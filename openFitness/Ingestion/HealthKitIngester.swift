@@ -744,7 +744,6 @@ public final class HealthKitIngester: Sendable {
     }
 }
 
-// Extension to map HKWorkoutActivityType name
 extension HKWorkoutActivityType {
     public var name: String {
         switch self {
@@ -757,6 +756,38 @@ extension HKWorkoutActivityType {
         case .functionalStrengthTraining: return "Strength Training"
         case .pilates: return "Pilates"
         case .highIntensityIntervalTraining: return "HIIT"
+        case .climbing: return "Climbing"
+        case .rowing: return "Rowing"
+        case .elliptical: return "Elliptical"
+        case .dance: return "Dance"
+        case .traditionalStrengthTraining: return "Traditional Strength"
+        case .coreTraining: return "Core Training"
+        case .crossTraining: return "Cross Training"
+        case .tennis: return "Tennis"
+        case .soccer: return "Soccer"
+        case .basketball: return "Basketball"
+        case .boxing: return "Boxing"
+        case .golf: return "Golf"
+        case .stairClimbing: return "Stair Climbing"
+        case .snowboarding: return "Snowboarding"
+        case .downhillSkiing: return "Downhill Skiing"
+        case .crossCountrySkiing: return "Cross Country Skiing"
+        case .martialArts: return "Martial Arts"
+        case .kickboxing: return "Kickboxing"
+        case .cooldown: return "Cooldown"
+        case .mixedCardio: return "Mixed Cardio"
+        case .barre: return "Barre"
+        case .pickleball: return "Pickleball"
+        case .badminton: return "Badminton"
+        case .squash: return "Squash"
+        case .tableTennis: return "Table Tennis"
+        case .volleyball: return "Volleyball"
+        case .bowling: return "Bowling"
+        case .sailing: return "Sailing"
+        case .skatingSports: return "Skating"
+        case .fitnessGaming: return "Fitness Gaming"
+        case .gymnastics: return "Gymnastics"
+        case .handball: return "Handball"
         default: return "Workout"
         }
     }

@@ -128,13 +128,7 @@ struct RecoveryDetailView: View {
         case .month:
             let last30 = filteredMetrics.filter { isHRV ? $0.hrv > 0 : $0.rhr > 0 }
             let points = last30.map { isHRV ? $0.hrv : $0.rhr }
-            let labels = last30.enumerated().map { index, m in
-                if index == 3 { return "Week 1" }
-                else if index == 10 { return "Week 2" }
-                else if index == 17 { return "Week 3" }
-                else if index == 24 { return "Week 4" }
-                else { return "" }
-            }
+            let labels = ["W1", "W2", "W3", "W4"]
             let average = points.isEmpty ? 0.0 : points.reduce(0, +) / Double(points.count)
             return TimeframeData(points: points, labels: labels, average: average)
             

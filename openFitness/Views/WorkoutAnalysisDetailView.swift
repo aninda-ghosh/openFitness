@@ -116,7 +116,6 @@ struct WorkoutAnalysisDetailView: View {
             
         case .month:
             var points: [Double] = []
-            var labels: [String] = []
             for index in 0..<30 {
                 let daysAgo = 29 - index
                 let date = calendar.date(byAdding: .day, value: -daysAgo, to: now)!
@@ -126,13 +125,8 @@ struct WorkoutAnalysisDetailView: View {
                 let workoutsOnDay = filteredWorkouts.filter { $0.date >= dayStart && $0.date < dayEnd }
                 let strainOnDay = workoutsOnDay.reduce(0.0) { $0 + $1.strainContribution }
                 points.append(strainOnDay)
-                
-                if index == 3 { labels.append("Week 1") }
-                else if index == 10 { labels.append("Week 2") }
-                else if index == 17 { labels.append("Week 3") }
-                else if index == 24 { labels.append("Week 4") }
-                else { labels.append("") }
             }
+            let labels = ["W1", "W2", "W3", "W4"]
             let average = points.isEmpty ? 0.0 : points.reduce(0, +) / Double(points.count)
             return TimeframeData(points: points, labels: labels, average: average)
             
@@ -294,11 +288,11 @@ struct WorkoutAnalysisDetailView: View {
                                                 .frame(width: geo.size.width * CGFloat(breakdown.high / totalMins))
                                         }
                                         if breakdown.moderate > 0 {
-                                            Color.orange
+                                            Theme.Colors.recoveryHigh
                                                 .frame(width: geo.size.width * CGFloat(breakdown.moderate / totalMins))
                                         }
                                         if breakdown.low > 0 {
-                                            Theme.Colors.recoveryHigh
+                                            Theme.Colors.sleepDeep
                                                 .frame(width: geo.size.width * CGFloat(breakdown.low / totalMins))
                                         }
                                     }
@@ -308,8 +302,8 @@ struct WorkoutAnalysisDetailView: View {
                                 
                                 VStack(spacing: 12) {
                                     IntensityRow(name: "High Intensity (Zone 5 / >145 bpm)", minutes: breakdown.high, total: totalMins, color: Theme.Colors.strainHigh)
-                                    IntensityRow(name: "Moderate Intensity (Zone 3-4 / 120-145 bpm)", minutes: breakdown.moderate, total: totalMins, color: .orange)
-                                    IntensityRow(name: "Low Intensity (Zone 1-2 / <120 bpm)", minutes: breakdown.low, total: totalMins, color: Theme.Colors.recoveryHigh)
+                                    IntensityRow(name: "Moderate Intensity (Zone 3-4 / 120-145 bpm)", minutes: breakdown.moderate, total: totalMins, color: Theme.Colors.recoveryHigh)
+                                    IntensityRow(name: "Low Intensity (Zone 1-2 / <120 bpm)", minutes: breakdown.low, total: totalMins, color: Theme.Colors.sleepDeep)
                                 }
                                 .padding(.top, 4)
                             } else {

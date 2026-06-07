@@ -483,13 +483,7 @@ struct EnergyDetailView: View {
             formatter.dateFormat = "E"
             labels = metrics.map { formatter.string(from: $0.date) }
         case .month:
-            labels = metrics.enumerated().map { index, m in
-                if index == 3 { return "Week 1" }
-                else if index == 10 { return "Week 2" }
-                else if index == 17 { return "Week 3" }
-                else if index == 24 { return "Week 4" }
-                else { return "" }
-            }
+            labels = ["W1", "W2", "W3", "W4"]
         case .year:
             formatter.dateFormat = "MMM"
             var monthlySums: [Int: Double] = [:]
