@@ -248,6 +248,15 @@ struct CustomLineGraph: View {
     let labels: [String]
     let lineColor: Color
     let gradientColors: [Color]?
+    let visibleCount: Int?
+    
+    init(points: [Double], labels: [String], lineColor: Color, gradientColors: [Color]? = nil, visibleCount: Int? = nil) {
+        self.points = points
+        self.labels = labels
+        self.lineColor = lineColor
+        self.gradientColors = gradientColors
+        self.visibleCount = visibleCount
+    }
     
     var body: some View {
         VStack(spacing: 10) {
@@ -261,6 +270,8 @@ struct CustomLineGraph: View {
                 let minVal = rawMin == rawMax ? (rawMin > 0 ? rawMin * 0.8 : 0.0) : rawMin
                 let maxVal = rawMin == rawMax ? (rawMin > 0 ? rawMin * 1.2 : 10.0) : rawMax
                 let range = maxVal - minVal > 0 ? maxVal - minVal : 1.0
+                
+                let limit = min(points.count, visibleCount ?? points.count)
                 
                 // Helper to map a data point to y-coordinate with 15% padding top and bottom
                 let yForVal: (Double) -> CGFloat = { val in
@@ -296,7 +307,7 @@ struct CustomLineGraph: View {
                 
                 // 1. Smooth Path of the baseline variance envelope
                 let envelopePath = Path { path in
-                    guard points.count > 1, movingBounds.upper.count == points.count else { return }
+                    guard limit > 1, movingBounds.upper.count == points.count else { return }
                     
                     let yForUpper: (Int) -> CGFloat = { idx in
                         let val = max(minVal, min(maxVal, movingBounds.upper[idx]))
@@ -309,7 +320,7 @@ struct CustomLineGraph: View {
                     }
                     
                     path.move(to: CGPoint(x: xForIdx(0), y: yForUpper(0)))
-                    for i in 0..<points.count - 1 {
+                    for i in 0..<limit - 1 {
                         let p0 = CGPoint(x: xForIdx(i), y: yForUpper(i))
                         let p1 = CGPoint(x: xForIdx(i+1), y: yForUpper(i+1))
                         let cp1 = CGPoint(x: p0.x + (p1.x - p0.x) / 3.0, y: p0.y)
@@ -317,8 +328,8 @@ struct CustomLineGraph: View {
                         path.addCurve(to: p1, control1: cp1, control2: cp2)
                     }
                     
-                    path.addLine(to: CGPoint(x: width, y: yForLower(points.count - 1)))
-                    for i in (0..<points.count - 1).reversed() {
+                    path.addLine(to: CGPoint(x: xForIdx(limit - 1), y: yForLower(limit - 1)))
+                    for i in (0..<limit - 1).reversed() {
                         let p0 = CGPoint(x: xForIdx(i+1), y: yForLower(i+1))
                         let p1 = CGPoint(x: xForIdx(i), y: yForLower(i))
                         let cp1 = CGPoint(x: p0.x - (p0.x - p1.x) / 3.0, y: p0.y)
@@ -330,10 +341,10 @@ struct CustomLineGraph: View {
                 
                 // 2. Smooth Line Path
                 let linePath = Path { path in
-                    guard points.count > 1 else { return }
+                    guard limit > 1 else { return }
                     path.move(to: CGPoint(x: xForIdx(0), y: yForVal(points[0])))
                     
-                    for i in 0..<points.count - 1 {
+                    for i in 0..<limit - 1 {
                         let p0 = CGPoint(x: xForIdx(i), y: yForVal(points[i]))
                         let p1 = CGPoint(x: xForIdx(i+1), y: yForVal(points[i+1]))
                         let cp1 = CGPoint(x: p0.x + (p1.x - p0.x) / 3.0, y: p0.y)
@@ -344,11 +355,11 @@ struct CustomLineGraph: View {
                 
                 // 3. Smooth Area Fill Path
                 let fillPath = Path { path in
-                    guard points.count > 1 else { return }
+                    guard limit > 1 else { return }
                     path.move(to: CGPoint(x: xForIdx(0), y: height))
                     path.addLine(to: CGPoint(x: xForIdx(0), y: yForVal(points[0])))
                     
-                    for i in 0..<points.count - 1 {
+                    for i in 0..<limit - 1 {
                         let p0 = CGPoint(x: xForIdx(i), y: yForVal(points[i]))
                         let p1 = CGPoint(x: xForIdx(i+1), y: yForVal(points[i+1]))
                         let cp1 = CGPoint(x: p0.x + (p1.x - p0.x) / 3.0, y: p0.y)
@@ -356,7 +367,7 @@ struct CustomLineGraph: View {
                         path.addCurve(to: p1, control1: cp1, control2: cp2)
                     }
                     
-                    path.addLine(to: CGPoint(x: width, y: height))
+                    path.addLine(to: CGPoint(x: xForIdx(limit - 1), y: height))
                     path.closeSubpath()
                 }
                 
@@ -373,7 +384,7 @@ struct CustomLineGraph: View {
                     .stroke(Color.white.opacity(0.04), lineWidth: 1)
                     
                     // 2. Variance Envelope
-                    if points.count > 1 {
+                    if limit > 1 {
                         envelopePath
                             .fill(lineColor.opacity(0.08))
                     }
@@ -389,8 +400,8 @@ struct CustomLineGraph: View {
                         .stroke(lineColor, style: StrokeStyle(lineWidth: 3.0, lineCap: .round, lineJoin: .round))
                     
                     // 5. Stylized vertex nodes
-                    if points.count <= 31 && points.count > 1 {
-                        ForEach(0..<points.count, id: \.self) { i in
+                    if limit <= 31 && limit > 1 {
+                        ForEach(0..<limit, id: \.self) { i in
                             let x = xForIdx(i)
                             let y = yForVal(points[i])
                             
@@ -415,11 +426,12 @@ struct CustomLineGraph: View {
                     }
                     
                     // 6. Max & Min value indicators
-                    if points.count > 1 {
-                        let maxVal_pt = points.max() ?? 0.0
-                        let minVal_pt = points.min() ?? 0.0
+                    if limit > 1 {
+                        let visiblePoints = Array(points.prefix(limit))
+                        let maxVal_pt = visiblePoints.max() ?? 0.0
+                        let minVal_pt = visiblePoints.min() ?? 0.0
                         
-                        if let maxIdx = points.firstIndex(of: maxVal_pt) {
+                        if let maxIdx = visiblePoints.firstIndex(of: maxVal_pt) {
                             let x = xForIdx(maxIdx)
                             let y = yForVal(maxVal_pt)
                             
@@ -443,7 +455,7 @@ struct CustomLineGraph: View {
                                 .position(x: min(width - 18, max(18, x)), y: max(14, y - 14))
                         }
                         
-                        if let minIdx = points.lastIndex(of: minVal_pt), maxVal_pt != minVal_pt {
+                        if let minIdx = visiblePoints.lastIndex(of: minVal_pt), maxVal_pt != minVal_pt {
                             let x = xForIdx(minIdx)
                             let y = yForVal(minVal_pt)
                             
@@ -470,12 +482,21 @@ struct CustomLineGraph: View {
                 }
             }
             
-            // X-Axis
+            // X-Axis Timeline Separator Line
+            Rectangle()
+                .fill(Color.white.opacity(0.1))
+                .frame(height: 1)
+                .padding(.horizontal, 2)
+            
+            // X-Axis Labels (Supports Multiline Texts)
             HStack(spacing: 0) {
                 ForEach(0..<labels.count, id: \.self) { index in
                     Text(labels[index])
-                        .font(Theme.Typography.roundedFont(size: 10, weight: .bold))
-                        .foregroundColor(.white.opacity(0.35))
+                        .font(Theme.Typography.roundedFont(size: 9, weight: .bold))
+                        .foregroundColor(.white.opacity(0.45))
+                        .multilineTextAlignment(.center)
+                        .lineLimit(nil)
+                        .minimumScaleFactor(0.8)
                         .frame(maxWidth: .infinity)
                 }
             }

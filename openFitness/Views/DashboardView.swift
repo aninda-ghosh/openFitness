@@ -37,6 +37,22 @@ struct DashboardView: View {
         if avg < 75 { return Color.orange }
         return Theme.Colors.recoveryLow
     }
+    private var dailySummaryText: String {
+        let rec = hkManager.todayRecovery
+        let sleep = hkManager.todaySleepScore
+        let strain = hkManager.todayStrain
+        
+        let recStatus = rec >= 80 ? "Fully recovered" : (rec >= 50 ? "Moderately recovered" : "Rest recommended")
+        let sleepStatus = sleep >= 80 ? "restful sleep" : (sleep >= 50 ? "decent sleep" : "poor sleep")
+        let strainStatus = strain >= 12.0 ? "high activity" : (strain >= 4.0 ? "moderate activity" : "light activity")
+        
+        return "\(recStatus) after \(sleepStatus) with \(strainStatus) today."
+    }
+    
+    private var energyBankStatusText: String {
+        let trend = hkManager.energyBankSleepCharge > 0 ? "Charged +\(hkManager.energyBankSleepCharge)% from sleep." : "No sleep charge logged."
+        return "\(trend) Stress average: \(hkManager.todayStressAverage)% • Active burn: \(Int(hkManager.todayActiveCalories)) kcal"
+    }
     
     var body: some View {
         NavigationView {
@@ -55,7 +71,7 @@ struct DashboardView: View {
                 .ignoresSafeArea()
                 
                 ScrollView(showsIndicators: false) {
-                    VStack(spacing: 20) {
+                    VStack(spacing: 12) {
                         HStack {
                             Text("openFitness")
                                 .font(Theme.Typography.metricLabel(size: 28))
@@ -63,23 +79,43 @@ struct DashboardView: View {
 
                             Spacer()
 
-                            // LIVE / OFFLINE badge
-                            HStack(spacing: 5) {
-                                Circle()
-                                    .fill(hkManager.isAuthorized ? Color.green : Color.red)
-                                    .frame(width: 6, height: 6)
-                                Text(hkManager.isAuthorized ? "LIVE" : "OFFLINE")
-                                    .font(Theme.Typography.roundedFont(size: 10, weight: .bold))
-                                    .foregroundColor(hkManager.isAuthorized ? Color.green : Color.red)
+                            if hkManager.isSyncing {
+                                HStack(spacing: 5) {
+                                    ProgressView()
+                                        .tint(Theme.Colors.sleepDeep)
+                                        .scaleEffect(0.6)
+                                        .frame(width: 12, height: 12)
+                                    Text("SYNCING...")
+                                        .font(Theme.Typography.roundedFont(size: 10, weight: .bold))
+                                        .foregroundColor(Theme.Colors.sleepDeep)
+                                }
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 5)
+                                .background(Theme.Colors.sleepDeep.opacity(0.12))
+                                .cornerRadius(12)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(Theme.Colors.sleepDeep.opacity(0.3), lineWidth: 1)
+                                )
+                            } else {
+                                // LIVE / OFFLINE badge
+                                HStack(spacing: 5) {
+                                    Circle()
+                                        .fill(hkManager.isAuthorized ? Color.green : Color.red)
+                                        .frame(width: 6, height: 6)
+                                    Text(hkManager.isAuthorized ? "LIVE" : "OFFLINE")
+                                        .font(Theme.Typography.roundedFont(size: 10, weight: .bold))
+                                        .foregroundColor(hkManager.isAuthorized ? Color.green : Color.red)
+                                }
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 5)
+                                .background(hkManager.isAuthorized ? Color.green.opacity(0.12) : Color.red.opacity(0.12))
+                                .cornerRadius(12)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(hkManager.isAuthorized ? Color.green.opacity(0.3) : Color.red.opacity(0.3), lineWidth: 1)
+                                )
                             }
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 5)
-                            .background(hkManager.isAuthorized ? Color.green.opacity(0.12) : Color.red.opacity(0.12))
-                            .cornerRadius(12)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .stroke(hkManager.isAuthorized ? Color.green.opacity(0.3) : Color.red.opacity(0.3), lineWidth: 1)
-                            )
 
                             // FAQ button
                             Button(action: { showingFAQ = true }) {
@@ -95,13 +131,7 @@ struct DashboardView: View {
                         
                         // Hero Card: Activeness Score (calibrated) or Stay Active (uncalibrated)
                         if hkManager.isCalibrated {
-                            ActivenessScoreCard(score: hkManager.activenessScore,
-                                                recovery: hkManager.todayRecovery,
-                                                strain: hkManager.todayStrain,
-                                                sleepScore: hkManager.todaySleepScore,
-                                                steps: hkManager.todaySteps,
-                                                activeCalories: hkManager.todayActiveCalories,
-                                                stressAverage: hkManager.todayStressAverage)
+                            ActivenessScoreCard(hkManager: hkManager)
                             .padding(.horizontal)
                         } else {
                             // Stay Active greeting hero card (Dribbble neon yellow-green style)
@@ -156,9 +186,16 @@ struct DashboardView: View {
                         // Daily Summary Card (Compact)
                         VStack(alignment: .leading, spacing: 14) {
                             HStack {
-                                Text("DAILY SUMMARY")
-                                    .font(Theme.Typography.cardTitle)
-                                    .foregroundColor(.white.opacity(0.6))
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("DAILY SUMMARY")
+                                        .font(Theme.Typography.cardTitle)
+                                        .foregroundColor(.white.opacity(0.6))
+                                    Text(dailySummaryText)
+                                        .font(Theme.Typography.roundedFont(size: 10, weight: .medium))
+                                        .foregroundColor(.white.opacity(0.4))
+                                        .lineLimit(2)
+                                        .multilineTextAlignment(.leading)
+                                }
                                 Spacer()
                                 Image(systemName: "circle.grid.3x3.fill")
                                     .foregroundColor(Theme.Colors.recoveryHigh)
@@ -230,9 +267,14 @@ struct DashboardView: View {
                         // Today's Activity Card (Steps & Active Energy)
                         VStack(alignment: .leading, spacing: 14) {
                             HStack {
-                                Text("TODAY'S ACTIVITY")
-                                    .font(Theme.Typography.cardTitle)
-                                    .foregroundColor(.white.opacity(0.6))
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("TODAY'S ACTIVITY")
+                                        .font(Theme.Typography.cardTitle)
+                                        .foregroundColor(.white.opacity(0.6))
+                                    Text("Tap steps or calories to view trends")
+                                        .font(Theme.Typography.roundedFont(size: 10, weight: .medium))
+                                        .foregroundColor(.white.opacity(0.35))
+                                }
                                 Spacer()
                                 Image(systemName: "figure.run")
                                     .foregroundColor(Theme.Colors.strainHigh)
@@ -240,119 +282,147 @@ struct DashboardView: View {
                             
                             HStack(spacing: 20) {
                                 // Steps
-                                VStack(alignment: .leading, spacing: 6) {
-                                    HStack {
-                                        Image(systemName: "shoeprints.fill")
-                                            .font(.footnote)
-                                            .foregroundColor(Theme.Colors.recoveryHigh)
-                                        Text("STEPS")
-                                            .font(Theme.Typography.roundedFont(size: 10, weight: .bold))
-                                            .foregroundColor(.white.opacity(0.4))
-                                    }
-                                    
-                                    Text("\(hkManager.todaySteps)")
-                                        .font(Theme.Typography.roundedFont(size: 22, weight: .bold))
-                                        .foregroundColor(.white)
-                                    
-                                    // Progress bar
-                                    GeometryReader { geo in
-                                        ZStack(alignment: .leading) {
-                                            RoundedRectangle(cornerRadius: 3)
-                                                .fill(Color.white.opacity(0.06))
-                                            
-                                            RoundedRectangle(cornerRadius: 3)
-                                                .fill(Theme.Colors.recoveryHigh)
-                                                .frame(width: geo.size.width * CGFloat(min(1.0, Double(hkManager.todaySteps) / 10000.0)))
-                                                .shadow(color: Theme.Colors.recoveryHigh.opacity(0.4), radius: 3, x: 0, y: 1)
+                                NavigationLink(destination: ActivityDetailView(hkManager: hkManager, initialTab: 0)) {
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        HStack {
+                                            Image(systemName: "shoeprints.fill")
+                                                .font(.footnote)
+                                                .foregroundColor(Theme.Colors.recoveryHigh)
+                                            Text("STEPS")
+                                                .font(Theme.Typography.roundedFont(size: 10, weight: .bold))
+                                                .foregroundColor(.white.opacity(0.4))
                                         }
+                                        
+                                        Text("\(hkManager.todaySteps)")
+                                            .font(Theme.Typography.roundedFont(size: 22, weight: .bold))
+                                            .foregroundColor(.white)
+                                        
+                                        // Progress bar
+                                        GeometryReader { geo in
+                                            ZStack(alignment: .leading) {
+                                                RoundedRectangle(cornerRadius: 3)
+                                                    .fill(Color.white.opacity(0.06))
+                                                
+                                                RoundedRectangle(cornerRadius: 3)
+                                                    .fill(Theme.Colors.recoveryHigh)
+                                                    .frame(width: geo.size.width * CGFloat(min(1.0, Double(hkManager.todaySteps) / 10000.0)))
+                                                    .shadow(color: Theme.Colors.recoveryHigh.opacity(0.4), radius: 3, x: 0, y: 1)
+                                            }
+                                        }
+                                        .frame(height: 6)
+                                        
+                                        Text("Goal: 10,000")
+                                            .font(Theme.Typography.roundedFont(size: 9, weight: .semibold))
+                                            .foregroundColor(.white.opacity(0.3))
                                     }
-                                    .frame(height: 6)
-                                    
-                                    Text("Goal: 10,000")
-                                        .font(Theme.Typography.roundedFont(size: 9, weight: .semibold))
-                                        .foregroundColor(.white.opacity(0.3))
                                 }
+                                .buttonStyle(PlainButtonStyle())
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 
                                 // Active Energy
-                                VStack(alignment: .leading, spacing: 6) {
-                                    HStack {
-                                        Image(systemName: "flame.fill")
-                                            .font(.footnote)
-                                            .foregroundColor(Theme.Colors.strainHigh)
-                                        Text("ACTIVE ENERGY")
-                                            .font(Theme.Typography.roundedFont(size: 10, weight: .bold))
-                                            .foregroundColor(.white.opacity(0.4))
-                                    }
-                                    
-                                    Text("\(Int(hkManager.todayActiveCalories)) kcal")
-                                        .font(Theme.Typography.roundedFont(size: 22, weight: .bold))
-                                        .foregroundColor(.white)
-                                    
-                                    // Progress bar
-                                    GeometryReader { geo in
-                                        ZStack(alignment: .leading) {
-                                            RoundedRectangle(cornerRadius: 3)
-                                                .fill(Color.white.opacity(0.06))
-                                            
-                                            RoundedRectangle(cornerRadius: 3)
-                                                .fill(Theme.Colors.strainHigh)
-                                                .frame(width: geo.size.width * CGFloat(min(1.0, hkManager.todayActiveCalories / 600.0)))
-                                                .shadow(color: Theme.Colors.strainHigh.opacity(0.4), radius: 3, x: 0, y: 1)
+                                NavigationLink(destination: ActivityDetailView(hkManager: hkManager, initialTab: 1)) {
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        HStack {
+                                            Image(systemName: "flame.fill")
+                                                .font(.footnote)
+                                                .foregroundColor(Theme.Colors.strainHigh)
+                                            Text("ACTIVE ENERGY")
+                                                .font(Theme.Typography.roundedFont(size: 10, weight: .bold))
+                                                .foregroundColor(.white.opacity(0.4))
                                         }
+                                        
+                                        Text("\(Int(hkManager.todayActiveCalories)) kcal")
+                                            .font(Theme.Typography.roundedFont(size: 22, weight: .bold))
+                                            .foregroundColor(.white)
+                                        
+                                        // Progress bar
+                                        GeometryReader { geo in
+                                            ZStack(alignment: .leading) {
+                                                RoundedRectangle(cornerRadius: 3)
+                                                    .fill(Color.white.opacity(0.06))
+                                                
+                                                RoundedRectangle(cornerRadius: 3)
+                                                    .fill(Theme.Colors.strainHigh)
+                                                    .frame(width: geo.size.width * CGFloat(min(1.0, hkManager.todayActiveCalories / 600.0)))
+                                                    .shadow(color: Theme.Colors.strainHigh.opacity(0.4), radius: 3, x: 0, y: 1)
+                                            }
+                                        }
+                                        .frame(height: 6)
+                                        
+                                        Text("Goal: 600 kcal")
+                                            .font(Theme.Typography.roundedFont(size: 9, weight: .semibold))
+                                            .foregroundColor(.white.opacity(0.3))
                                     }
-                                    .frame(height: 6)
-                                    
-                                    Text("Goal: 600 kcal")
-                                        .font(Theme.Typography.roundedFont(size: 9, weight: .semibold))
-                                        .foregroundColor(.white.opacity(0.3))
                                 }
+                                .buttonStyle(PlainButtonStyle())
                                 .frame(maxWidth: .infinity, alignment: .leading)
                             }
                         }
                         .glassCard()
                         .padding(.horizontal)
+
                         
                         // Energy Bank Card
-                        VStack(alignment: .leading, spacing: 10) {
-                            HStack {
-                                Text("ENERGY BANK")
-                                    .font(Theme.Typography.cardTitle)
-                                    .foregroundColor(.white.opacity(0.6))
-                                Spacer()
-                                Text("\(hkManager.energyBank)%")
-                                    .font(Theme.Typography.roundedFont(size: 13, weight: .bold))
-                                    .foregroundColor(Theme.Colors.sleepDeep)
-                            }
-                            
-                            GeometryReader { geo in
-                                ZStack(alignment: .leading) {
-                                    Capsule()
-                                        .fill(Color.white.opacity(0.06))
-                                        .frame(height: 8)
-                                    
-                                    Capsule()
-                                        .fill(LinearGradient(colors: [Theme.Colors.sleepDeep, Theme.Colors.recoveryHigh], startPoint: .leading, endPoint: .trailing))
-                                        .frame(width: geo.size.width * CGFloat(hkManager.energyBank) / 100.0, height: 8)
+                        // Energy Bank Card
+                        NavigationLink(destination: EnergyDetailView(hkManager: hkManager)) {
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("ENERGY BANK")
+                                            .font(Theme.Typography.cardTitle)
+                                            .foregroundColor(.white.opacity(0.6))
+                                        Text(energyBankStatusText)
+                                            .font(Theme.Typography.roundedFont(size: 10, weight: .medium))
+                                            .foregroundColor(.white.opacity(0.4))
+                                            .lineLimit(2)
+                                            .multilineTextAlignment(.leading)
+                                    }
+                                    Spacer()
+                                    Text("\(hkManager.energyBank)%")
+                                        .font(Theme.Typography.roundedFont(size: 16, weight: .bold))
+                                        .foregroundColor(Theme.Colors.sleepDeep)
                                 }
+                                
+                                GeometryReader { geo in
+                                    ZStack(alignment: .leading) {
+                                        Capsule()
+                                            .fill(Color.white.opacity(0.06))
+                                            .frame(height: 8)
+                                        
+                                        Capsule()
+                                            .fill(LinearGradient(colors: [Theme.Colors.sleepDeep, Theme.Colors.recoveryHigh], startPoint: .leading, endPoint: .trailing))
+                                            .frame(width: geo.size.width * CGFloat(hkManager.energyBank) / 100.0, height: 8)
+                                    }
+                                }
+                                .frame(height: 8)
+                                
+                                let chargeStr = "+\(hkManager.energyBankCharged)%"
+                                let drainStr = "-\(hkManager.energyBankDrained)%"
+                                let lastTime = hkManager.energyBankLastChargedString.replacingOccurrences(of: "Last charged to ", with: "")
+                                let subtext = lastTime.isEmpty ? "\(chargeStr) Charged  •  \(drainStr) Drained" : "\(chargeStr) Charged  •  \(drainStr) Drained  •  \(lastTime)"
+                                
+                                Text(subtext)
+                                    .font(Theme.Typography.roundedFont(size: 10, weight: .medium))
+                                    .foregroundColor(.white.opacity(0.4))
+                                    .multilineTextAlignment(.leading)
                             }
-                            .frame(height: 8)
-                            
-                            Text(energyBankMessage)
-                                .font(Theme.Typography.roundedFont(size: 12, weight: .regular))
-                                .foregroundColor(.white.opacity(0.5))
-                                .padding(.top, 2)
+                            .glassCard()
+                            .padding(.horizontal)
                         }
-                        .glassCard()
-                        .padding(.horizontal)
+                        .buttonStyle(PlainButtonStyle())
                         
                         // Stress & Heart Rate Card
                         NavigationLink(destination: StressHeartRateDetailView(hkManager: hkManager)) {
                             VStack(alignment: .leading, spacing: 16) {
                                 HStack {
-                                    Text("STRESS & HEART RATE")
-                                        .font(Theme.Typography.cardTitle)
-                                        .foregroundColor(.white.opacity(0.6))
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("STRESS & HEART RATE")
+                                            .font(Theme.Typography.cardTitle)
+                                            .foregroundColor(.white.opacity(0.6))
+                                        Text("Tap to view autonomic stress & ECG")
+                                            .font(Theme.Typography.roundedFont(size: 10, weight: .medium))
+                                            .foregroundColor(.white.opacity(0.35))
+                                    }
                                     Spacer()
                                     Image(systemName: "heart.text.square.fill")
                                         .foregroundColor(Theme.Colors.strainHigh)
@@ -453,6 +523,7 @@ struct DashboardView: View {
                         
                         // Vitals Monitor (Biomarkers Grid)
                         VitalsMonitorView(
+                            hkManager: hkManager,
                             rhr: hkManager.todayRHR,
                             hrv: hkManager.todayHRV,
                             rr: hkManager.todayRespiratoryRate,
@@ -460,6 +531,9 @@ struct DashboardView: View {
                             temp: hkManager.todayBodyTemperature,
                             sleepHours: hkManager.todaySleepHours
                         )
+                        
+                        // Weekly Workout Patterns Card
+                        WorkoutPatternCard(workouts: hkManager.recentWorkouts, hkManager: hkManager)
                         
                         // 4. ECG Samples Card
                         ECGCardView(ecgCount: hkManager.recentECGSamples.count) {
@@ -476,9 +550,6 @@ struct DashboardView: View {
                                 self.showingNoECGAlert = true
                             }
                         }
-                        
-                        // Workouts List
-                        WorkoutsListView(workouts: hkManager.recentWorkouts, hkManager: hkManager)
                     }
                     .padding(.bottom, 30)
                 }
@@ -623,6 +694,7 @@ struct WorkoutsListView: View {
 
 // MARK: - Vitals Monitor Grid
 struct VitalsMonitorView: View {
+    @ObservedObject var hkManager: HealthKitManager
     let rhr: Double
     let hrv: Double
     let rr: Double
@@ -642,65 +714,91 @@ struct VitalsMonitorView: View {
             }
             
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
-                VitalTileView(
-                    title: "Heart Rate Variability",
-                    shortTitle: "HRV",
-                    value: hrv > 0 ? String(format: "%.0f ms", hrv) : "-- ms",
-                    status: hrv == 0 ? "No Data" : (hrv < 40 ? "Low" : (hrv > 75 ? "High" : "Normal")),
-                    color: hrv == 0 ? .gray : (hrv < 40 ? Theme.Colors.recoveryLow : (hrv > 75 ? Theme.Colors.recoveryHigh : Theme.Colors.recoveryHigh)),
-                    ratio: hrv == 0 ? 0.5 : min(1.0, max(0.0, (hrv - 20) / 80.0)),
-                    iconName: "waveform.path.ecg"
-                )
+                NavigationLink(destination: RecoveryDetailView(hkManager: hkManager, score: hkManager.todayRecovery, hrv: hkManager.todayHRV, rhr: hkManager.todayRHR, initialTab: 0)) {
+                    VitalTileView(
+                        title: "Heart Rate Variability",
+                        shortTitle: "HRV",
+                        value: hrv > 0 ? String(format: "%.0f ms", hrv) : "-- ms",
+                        status: hrv == 0 ? "No Data" : (hrv < 40 ? "Low" : (hrv > 75 ? "High" : "Normal")),
+                        color: hrv == 0 ? .gray : (hrv < 40 ? Theme.Colors.recoveryLow : (hrv > 75 ? Theme.Colors.recoveryHigh : Theme.Colors.recoveryHigh)),
+                        ratio: hrv == 0 ? 0.5 : min(1.0, max(0.0, (hrv - 20) / 80.0)),
+                        iconName: "waveform.path.ecg"
+                    )
+                }
+                .buttonStyle(PlainButtonStyle())
                 
-                VitalTileView(
-                    title: "Resting Heart Rate",
-                    shortTitle: "RHR",
-                    value: rhr > 0 ? String(format: "%.0f bpm", rhr) : "-- bpm",
-                    status: rhr == 0 ? "No Data" : (rhr > 75 ? "Elevated" : (rhr < 50 ? "Low" : "Normal")),
-                    color: rhr == 0 ? .gray : (rhr > 75 ? Theme.Colors.recoveryLow : (rhr < 50 ? Theme.Colors.recoveryMid : Theme.Colors.recoveryHigh)),
-                    ratio: rhr == 0 ? 0.5 : min(1.0, max(0.0, (rhr - 40) / 50.0)),
-                    iconName: "heart.fill"
-                )
+                NavigationLink(destination: RecoveryDetailView(hkManager: hkManager, score: hkManager.todayRecovery, hrv: hkManager.todayHRV, rhr: hkManager.todayRHR, initialTab: 1)) {
+                    VitalTileView(
+                        title: "Resting Heart Rate",
+                        shortTitle: "RHR",
+                        value: rhr > 0 ? String(format: "%.0f bpm", rhr) : "-- bpm",
+                        status: rhr == 0 ? "No Data" : (rhr > 75 ? "Elevated" : (rhr < 50 ? "Low" : "Normal")),
+                        color: rhr == 0 ? .gray : (rhr > 75 ? Theme.Colors.recoveryLow : (rhr < 50 ? Theme.Colors.recoveryMid : Theme.Colors.recoveryHigh)),
+                        ratio: rhr == 0 ? 0.5 : min(1.0, max(0.0, (rhr - 40) / 50.0)),
+                        iconName: "heart.fill"
+                    )
+                }
+                .buttonStyle(PlainButtonStyle())
                 
-                VitalTileView(
-                    title: "Respiratory Rate",
-                    shortTitle: "RR",
-                    value: rr > 0 ? String(format: "%.1f rpm", rr) : "-- rpm",
-                    status: rr == 0 ? "No Data" : (rr > 18.0 ? "Higher" : (rr < 12.0 ? "Lower" : "Normal")),
-                    color: rr == 0 ? .gray : (rr > 18.0 ? Color.orange : (rr < 12.0 ? Color.blue : Theme.Colors.recoveryHigh)),
-                    ratio: rr == 0 ? 0.5 : min(1.0, max(0.0, (rr - 10.0) / 12.0)),
-                    iconName: "wind"
-                )
+                NavigationLink(destination: VitalsDetailView(hkManager: hkManager, type: .respiratoryRate)) {
+                    VitalTileView(
+                        title: "Respiratory Rate",
+                        shortTitle: "RR",
+                        value: rr > 0 ? String(format: "%.1f rpm", rr) : "-- rpm",
+                        status: rr == 0 ? "No Data" : (rr > 18.0 ? "Higher" : (rr < 12.0 ? "Lower" : "Normal")),
+                        color: rr == 0 ? .gray : (rr > 18.0 ? Color.orange : (rr < 12.0 ? Color.blue : Theme.Colors.recoveryHigh)),
+                        ratio: rr == 0 ? 0.5 : min(1.0, max(0.0, (rr - 10.0) / 12.0)),
+                        iconName: "wind"
+                    )
+                }
+                .buttonStyle(PlainButtonStyle())
                 
-                VitalTileView(
-                    title: "Oxygen Saturation",
-                    shortTitle: "SpO2",
-                    value: spo2 > 0 ? String(format: "%.1f%%", spo2) : "--%",
-                    status: spo2 == 0 ? "No Data" : (spo2 < 95.0 ? "Lower" : "Optimal"),
-                    color: spo2 == 0 ? .gray : (spo2 < 95.0 ? Theme.Colors.recoveryLow : Theme.Colors.recoveryHigh),
-                    ratio: spo2 == 0 ? 0.5 : min(1.0, max(0.0, (spo2 - 90.0) / 10.0)),
-                    iconName: "lungs.fill"
-                )
+                NavigationLink(destination: VitalsDetailView(hkManager: hkManager, type: .oxygenSaturation)) {
+                    VitalTileView(
+                        title: "Oxygen Saturation",
+                        shortTitle: "SpO2",
+                        value: spo2 > 0 ? String(format: "%.1f%%", spo2) : "--%",
+                        status: spo2 == 0 ? "No Data" : (spo2 < 95.0 ? "Lower" : "Optimal"),
+                        color: spo2 == 0 ? .gray : (spo2 < 95.0 ? Theme.Colors.recoveryLow : Theme.Colors.recoveryHigh),
+                        ratio: spo2 == 0 ? 0.5 : min(1.0, max(0.0, (spo2 - 90.0) / 10.0)),
+                        iconName: "lungs.fill"
+                    )
+                }
+                .buttonStyle(PlainButtonStyle())
                 
-                VitalTileView(
-                    title: "Skin Temperature",
-                    shortTitle: "Temp",
-                    value: temp > 0 ? String(format: "%.1f °C", temp) : "-- °C",
-                    status: temp == 0 ? "No Data" : (temp > 37.0 ? "Higher" : (temp < 35.5 ? "Lower" : "Normal")),
-                    color: temp == 0 ? .gray : (temp > 37.0 ? Color.orange : (temp < 35.5 ? Color.blue : Theme.Colors.recoveryHigh)),
-                    ratio: temp == 0 ? 0.5 : min(1.0, max(0.0, (temp - 35.0) / 3.0)),
-                    iconName: "thermometer.medium"
-                )
+                NavigationLink(destination: VitalsDetailView(hkManager: hkManager, type: .bodyTemperature)) {
+                    VitalTileView(
+                        title: "Skin Temperature",
+                        shortTitle: "Temp",
+                        value: temp > 0 ? String(format: "%.1f °C", temp) : "-- °C",
+                        status: temp == 0 ? "No Data" : (temp > 37.0 ? "Higher" : (temp < 35.5 ? "Lower" : "Normal")),
+                        color: temp == 0 ? .gray : (temp > 37.0 ? Color.orange : (temp < 35.5 ? Color.blue : Theme.Colors.recoveryHigh)),
+                        ratio: temp == 0 ? 0.5 : min(1.0, max(0.0, (temp - 35.0) / 3.0)),
+                        iconName: "thermometer.medium"
+                    )
+                }
+                .buttonStyle(PlainButtonStyle())
                 
-                VitalTileView(
-                    title: "Sleep Duration",
-                    shortTitle: "Sleep",
-                    value: sleepHours > 0 ? formatSleepHours(sleepHours) : "--",
-                    status: sleepHours == 0 ? "No Data" : (sleepHours < 6.5 ? "Short" : "Normal"),
-                    color: sleepHours == 0 ? .gray : (sleepHours < 6.5 ? Theme.Colors.recoveryMid : Theme.Colors.recoveryHigh),
-                    ratio: sleepHours == 0 ? 0.5 : min(1.0, max(0.0, (sleepHours - 4.0) / 6.0)),
-                    iconName: "bed.double.fill"
-                )
+                NavigationLink(destination: SleepDetailView(
+                    hkManager: hkManager,
+                    score: hkManager.todaySleepScore,
+                    duration: hkManager.todaySleepHours,
+                    needed: hkManager.todaySleepNeeded,
+                    deep: hkManager.todayDeepMinutes,
+                    rem: hkManager.todayRemMinutes,
+                    initialTab: 1
+                )) {
+                    VitalTileView(
+                        title: "Sleep Duration",
+                        shortTitle: "Sleep",
+                        value: sleepHours > 0 ? formatSleepHours(sleepHours) : "--",
+                        status: sleepHours == 0 ? "No Data" : (sleepHours < 6.5 ? "Short" : "Normal"),
+                        color: sleepHours == 0 ? .gray : (sleepHours < 6.5 ? Theme.Colors.recoveryMid : Theme.Colors.recoveryHigh),
+                        ratio: sleepHours == 0 ? 0.5 : min(1.0, max(0.0, (sleepHours - 4.0) / 6.0)),
+                        iconName: "bed.double.fill"
+                    )
+                }
+                .buttonStyle(PlainButtonStyle())
             }
         }
         .glassCard()
@@ -842,14 +940,17 @@ struct SheetBackgroundModifier: ViewModifier {
 }
 
 // MARK: - Activeness Score Hero Card
+// MARK: - Activeness Score Hero Card
 struct ActivenessScoreCard: View {
-    let score: Int
-    let recovery: Int
-    let strain: Double
-    let sleepScore: Int
-    let steps: Int
-    let activeCalories: Double
-    let stressAverage: Int
+    @ObservedObject var hkManager: HealthKitManager
+    
+    private var score: Int { hkManager.activenessScore }
+    private var recovery: Int { hkManager.todayRecovery }
+    private var strain: Double { hkManager.todayStrain }
+    private var sleepScore: Int { hkManager.todaySleepScore }
+    private var steps: Int { hkManager.todaySteps }
+    private var activeCalories: Double { hkManager.todayActiveCalories }
+    private var stressAverage: Int { hkManager.todayStressAverage }
     
     private var classification: (label: String, color: Color) {
         if score >= 80 { return ("Peak Form", Theme.Colors.recoveryHigh) }
@@ -877,100 +978,145 @@ struct ActivenessScoreCard: View {
     
     @State private var showingInfo = false
 
+    @ViewBuilder
+    private func destinationView(for label: String) -> some View {
+        switch label {
+        case "Recovery":
+            RecoveryDetailView(
+                hkManager: hkManager,
+                score: hkManager.todayRecovery,
+                hrv: hkManager.todayHRV,
+                rhr: hkManager.todayRHR
+            )
+        case "Strain":
+            StrainDetailView(
+                hkManager: hkManager,
+                strain: hkManager.todayStrain,
+                targetLow: 7.2,
+                targetHigh: 12.8,
+                calories: hkManager.todayActiveCalories,
+                avgHR: hkManager.todayAverageHR,
+                workouts: hkManager.recentWorkouts
+            )
+        case "Sleep":
+            SleepDetailView(
+                hkManager: hkManager,
+                score: hkManager.todaySleepScore,
+                duration: hkManager.todaySleepHours,
+                needed: hkManager.todaySleepNeeded,
+                deep: hkManager.todayDeepMinutes,
+                rem: hkManager.todayRemMinutes
+            )
+        case "Activity":
+            ActivityDetailView(hkManager: hkManager, initialTab: 0)
+        default: // Stress
+            StressHeartRateDetailView(hkManager: hkManager)
+        }
+    }
+
     var body: some View {
-        VStack(spacing: 16) {
-            // Header
-            HStack {
-                Text("ACTIVENESS SCORE")
-                    .font(Theme.Typography.cardTitle)
-                    .foregroundColor(.white.opacity(0.6))
-                Button(action: { showingInfo = true }) {
-                    Image(systemName: "info.circle")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.white.opacity(0.35))
-                }
-                .buttonStyle(PlainButtonStyle())
-                Spacer()
-                HStack(spacing: 4) {
-                    Circle()
-                        .fill(Theme.Colors.recoveryHigh)
-                        .frame(width: 5, height: 5)
-                    Text("CALIBRATED")
-                        .font(Theme.Typography.roundedFont(size: 9, weight: .bold))
-                        .foregroundColor(Theme.Colors.recoveryHigh.opacity(0.8))
-                }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 3)
-                .background(Theme.Colors.recoveryHigh.opacity(0.1))
-                .cornerRadius(8)
-                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Theme.Colors.recoveryHigh.opacity(0.2), lineWidth: 0.5))
-            }
-            
-            // Arc Gauge
-            ZStack {
-                // Background arc track
-                ArcShape(startAngle: -210, endAngle: 30, lineWidth: 14)
-                    .stroke(Color.white.opacity(0.06), style: StrokeStyle(lineWidth: 14, lineCap: .round))
-                    .frame(width: 160, height: 160)
-                
-                // Colored progress arc with gradient
-                ArcShape(startAngle: -210, endAngle: -210 + (240 * Double(min(score, 100)) / 100.0), lineWidth: 14)
-                    .stroke(
-                        AngularGradient(
-                            colors: [Theme.Colors.sleepDeep, Theme.Colors.recoveryHigh, Theme.Colors.strainHigh],
-                            center: .center,
-                            startAngle: .degrees(-210),
-                            endAngle: .degrees(30)
-                        ),
-                        style: StrokeStyle(lineWidth: 14, lineCap: .round)
-                    )
-                    .frame(width: 160, height: 160)
-                    .shadow(color: classification.color.opacity(0.4), radius: 6, x: 0, y: 2)
-                
-                // Score value in center
-                VStack(spacing: 2) {
-                    Text("\(score)")
-                        .font(Theme.Typography.metricLabel(size: 44))
-                        .foregroundColor(.white)
+        VStack(spacing: 12) {
+            // Upper Section: gauge on left, description on right
+            HStack(alignment: .center, spacing: 14) {
+                // Arc Gauge on the left
+                ZStack {
+                    // Background arc track
+                    ArcShape(startAngle: -210, endAngle: 30, lineWidth: 8)
+                        .stroke(Color.white.opacity(0.06), style: StrokeStyle(lineWidth: 8, lineCap: .round))
+                        .frame(width: 90, height: 90)
                     
-                    Text(classification.label)
-                        .font(Theme.Typography.roundedFont(size: 12, weight: .bold))
-                        .foregroundColor(classification.color)
-                }
-            }
-            .frame(height: 145)
-            .padding(.top, 4)
-            
-            // Description
-            Text(scoreDescription)
-                .font(Theme.Typography.roundedFont(size: 12, weight: .regular))
-                .foregroundColor(.white.opacity(0.5))
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 8)
-            
-            // Sub-score breakdown pills
-            HStack(spacing: 6) {
-                ForEach(subScores, id: \.label) { sub in
-                    VStack(spacing: 4) {
-                        Image(systemName: sub.icon)
-                            .font(.system(size: 10))
-                            .foregroundColor(sub.color)
-                        
-                        Text("\(sub.value)")
-                            .font(Theme.Typography.roundedFont(size: 12, weight: .bold))
+                    // Colored progress arc with gradient
+                    ArcShape(startAngle: -210, endAngle: -210 + (240 * Double(min(score, 100)) / 100.0), lineWidth: 8)
+                        .stroke(
+                            AngularGradient(
+                                colors: [Theme.Colors.sleepDeep, Theme.Colors.recoveryHigh, Theme.Colors.strainHigh],
+                                center: .center,
+                                startAngle: .degrees(-210),
+                                endAngle: .degrees(30)
+                            ),
+                            style: StrokeStyle(lineWidth: 8, lineCap: .round)
+                        )
+                        .frame(width: 90, height: 90)
+                        .shadow(color: classification.color.opacity(0.4), radius: 4, x: 0, y: 1)
+                    
+                    // Score value in center
+                    VStack(spacing: 0) {
+                        Text("\(score)")
+                            .font(Theme.Typography.metricLabel(size: 28))
                             .foregroundColor(.white)
                         
-                        Text(sub.label)
-                            .font(Theme.Typography.roundedFont(size: 8, weight: .semibold))
-                            .foregroundColor(.white.opacity(0.4))
+                        Text(classification.label)
+                            .font(Theme.Typography.roundedFont(size: 8, weight: .bold))
+                            .foregroundColor(classification.color)
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 8)
-                    .background(Color.white.opacity(0.04))
-                    .cornerRadius(10)
+                }
+                .frame(width: 90, height: 85)
+                
+                // Details on the right
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(alignment: .center) {
+                        Text("ACTIVENESS SCORE")
+                            .font(Theme.Typography.cardTitle)
+                            .foregroundColor(.white.opacity(0.6))
+                        Button(action: { showingInfo = true }) {
+                            Image(systemName: "info.circle")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(.white.opacity(0.35))
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        
+                        Spacer()
+                        
+                        HStack(spacing: 3) {
+                            Circle()
+                                .fill(Theme.Colors.recoveryHigh)
+                                .frame(width: 4, height: 4)
+                            Text("CALIBRATED")
+                                .font(Theme.Typography.roundedFont(size: 8, weight: .bold))
+                                .foregroundColor(Theme.Colors.recoveryHigh.opacity(0.8))
+                        }
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Theme.Colors.recoveryHigh.opacity(0.1))
+                        .cornerRadius(6)
+                    }
+                    
+                    Text(scoreDescription)
+                        .font(Theme.Typography.roundedFont(size: 11, weight: .regular))
+                        .foregroundColor(.white.opacity(0.55))
+                        .lineLimit(3)
+                        .multilineTextAlignment(.leading)
+                }
+            }
+            .padding(.top, 4)
+            
+            // Sub-score breakdown pills (with navigation links)
+            HStack(spacing: 6) {
+                ForEach(subScores, id: \.label) { sub in
+                    NavigationLink(destination: destinationView(for: sub.label)) {
+                        VStack(spacing: 2) {
+                            Image(systemName: sub.icon)
+                                .font(.system(size: 10))
+                                .foregroundColor(sub.color)
+                            
+                            Text("\(sub.value)%")
+                                .font(Theme.Typography.roundedFont(size: 11, weight: .bold))
+                                .foregroundColor(.white)
+                            
+                            Text(sub.label)
+                                .font(Theme.Typography.roundedFont(size: 8, weight: .semibold))
+                                .foregroundColor(.white.opacity(0.4))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 6)
+                        .background(Color.white.opacity(0.04))
+                        .cornerRadius(8)
+                    }
+                    .buttonStyle(PlainButtonStyle())
                 }
             }
         }
+        .padding(12)
         .glassCard()
         .sheet(isPresented: $showingInfo) {
             ActivenessScoreInfoSheet()
@@ -1225,6 +1371,177 @@ struct ArcShape: Shape {
                     endAngle: .degrees(endAngle),
                     clockwise: false)
         return path
+    }
+}
+
+// MARK: - Workout Pattern Card Component
+struct WorkoutPatternCard: View {
+    let workouts: [WorkoutItem]
+    let hkManager: HealthKitManager
+    
+    private var last7DaysWorkouts: [WorkoutItem] {
+        let calendar = Calendar.current
+        let sevenDaysAgo = calendar.date(byAdding: .day, value: -7, to: Date()) ?? Date()
+        return workouts.filter { $0.date >= sevenDaysAgo }
+    }
+    
+    private var totalWorkoutsCount: Int {
+        last7DaysWorkouts.count
+    }
+    
+    private var totalDurationMins: Int {
+        Int(last7DaysWorkouts.reduce(0.0) { $0 + $1.durationMinutes })
+    }
+    
+    private var totalCaloriesBurned: Int {
+        Int(last7DaysWorkouts.reduce(0.0) { $0 + $1.activeEnergyBurned })
+    }
+    
+    private var avgStrain: Double {
+        last7DaysWorkouts.isEmpty ? 0.0 : (last7DaysWorkouts.reduce(0.0) { $0 + $1.strainContribution } / Double(last7DaysWorkouts.count))
+    }
+    
+    private var intensityMins: (low: Double, moderate: Double, high: Double) {
+        var low = 0.0
+        var mod = 0.0
+        var high = 0.0
+        for w in last7DaysWorkouts {
+            if w.averageHeartRate >= 145 || w.strainContribution >= 10.0 {
+                high += w.durationMinutes
+            } else if w.averageHeartRate >= 120 || w.strainContribution >= 4.0 {
+                mod += w.durationMinutes
+            } else {
+                low += w.durationMinutes
+            }
+        }
+        return (low, mod, high)
+    }
+    
+    var body: some View {
+        NavigationLink(destination: WorkoutAnalysisDetailView(hkManager: hkManager)) {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("WEEKLY WORKOUT PATTERNS")
+                            .font(Theme.Typography.cardTitle)
+                            .foregroundColor(.white.opacity(0.6))
+                        Text(totalWorkoutsCount > 0 
+                             ? "\(totalWorkoutsCount) workouts logged • \(totalDurationMins) mins total"
+                             : "No workouts logged in the last 7 days")
+                            .font(Theme.Typography.roundedFont(size: 10, weight: .medium))
+                            .foregroundColor(.white.opacity(0.35))
+                    }
+                    Spacer()
+                    Image(systemName: "figure.run.circle.fill")
+                        .foregroundColor(Theme.Colors.strainHigh)
+                        .font(.title3)
+                }
+                
+                if totalWorkoutsCount > 0 {
+                    // Stat boxes
+                    HStack(spacing: 12) {
+                        WorkoutMiniStat(title: "AVG STRAIN", value: String(format: "%.1f", avgStrain), color: Theme.Colors.strainHigh)
+                        WorkoutMiniStat(title: "CALORIES", value: "\(totalCaloriesBurned) kcal", color: .orange)
+                        WorkoutMiniStat(title: "DURATION", value: "\(totalDurationMins)m", color: Theme.Colors.recoveryHigh)
+                    }
+                    
+                    // Intensity distribution
+                    let breakdown = intensityMins
+                    let totalMins = breakdown.low + breakdown.moderate + breakdown.high
+                    if totalMins > 0 {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("INTENSITY DISTRIBUTION")
+                                .font(Theme.Typography.roundedFont(size: 9, weight: .bold))
+                                .foregroundColor(.white.opacity(0.4))
+                            
+                            GeometryReader { geo in
+                                HStack(spacing: 0) {
+                                    if breakdown.high > 0 {
+                                        Theme.Colors.strainHigh
+                                            .frame(width: geo.size.width * CGFloat(breakdown.high / totalMins))
+                                    }
+                                    if breakdown.moderate > 0 {
+                                        Color.orange
+                                            .frame(width: geo.size.width * CGFloat(breakdown.moderate / totalMins))
+                                    }
+                                    if breakdown.low > 0 {
+                                        Theme.Colors.recoveryHigh
+                                            .frame(width: geo.size.width * CGFloat(breakdown.low / totalMins))
+                                    }
+                                }
+                                .clipShape(Capsule())
+                            }
+                            .frame(height: 8)
+                            
+                            HStack(spacing: 12) {
+                                if breakdown.high > 0 {
+                                    WorkoutIntensityLegend(name: "High", color: Theme.Colors.strainHigh)
+                                }
+                                if breakdown.moderate > 0 {
+                                    WorkoutIntensityLegend(name: "Mod", color: .orange)
+                                }
+                                if breakdown.low > 0 {
+                                    WorkoutIntensityLegend(name: "Low", color: Theme.Colors.recoveryHigh)
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    HStack {
+                        Image(systemName: "info.circle")
+                            .foregroundColor(.white.opacity(0.3))
+                        Text("Log workouts with Apple Watch to analyze intensity patterns.")
+                            .font(Theme.Typography.roundedFont(size: 11, weight: .regular))
+                            .foregroundColor(.white.opacity(0.45))
+                    }
+                    .padding(.vertical, 4)
+                }
+            }
+            .glassCard()
+            .padding(.horizontal)
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+}
+
+struct WorkoutMiniStat: View {
+    let title: String
+    let value: String
+    let color: Color
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title)
+                .font(Theme.Typography.roundedFont(size: 8, weight: .bold))
+                .foregroundColor(.white.opacity(0.4))
+            Text(value)
+                .font(Theme.Typography.roundedFont(size: 14, weight: .bold))
+                .foregroundColor(color)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(8)
+        .background(Color.white.opacity(0.03))
+        .cornerRadius(8)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.white.opacity(0.04), lineWidth: 1)
+        )
+    }
+}
+
+struct WorkoutIntensityLegend: View {
+    let name: String
+    let color: Color
+    
+    var body: some View {
+        HStack(spacing: 4) {
+            Circle()
+                .fill(color)
+                .frame(width: 6, height: 6)
+            Text(name)
+                .font(Theme.Typography.roundedFont(size: 9, weight: .semibold))
+                .foregroundColor(.white.opacity(0.5))
+        }
     }
 }
 

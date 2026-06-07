@@ -9,8 +9,18 @@ struct SleepDetailView: View {
     let rem: Double
     
     @State private var selectedTimeframe: Timeframe = .day
-    @State private var selectedGraphTab: Int = 0 // 0: Sleep Quality Score, 1: Sleep Duration (Hrs)
+    @State private var selectedGraphTab: Int
     @State private var showAlgorithmDetails = false
+    
+    init(hkManager: HealthKitManager, score: Int, duration: Double, needed: Double, deep: Double, rem: Double, initialTab: Int = 0) {
+        self.hkManager = hkManager
+        self.score = score
+        self.duration = duration
+        self.needed = needed
+        self.deep = deep
+        self.rem = rem
+        self._selectedGraphTab = State(initialValue: initialTab)
+    }
     
     private var historicalMetrics: [DailyMetrics] {
         hkManager.historicalMetrics
@@ -45,7 +55,11 @@ struct SleepDetailView: View {
                 remMinutes: rem,
                 activeCalories: hkManager.todayActiveCalories,
                 averageHR: hkManager.todayAverageHR > 0 ? hkManager.todayAverageHR : (hkManager.todayRHR > 0 ? hkManager.todayRHR + 20.0 : 80.0),
-                maxHR: hkManager.todayMaxHR > 0 ? hkManager.todayMaxHR : (hkManager.todayRHR > 0 ? hkManager.todayRHR + 65.0 : 140.0)
+                maxHR: hkManager.todayMaxHR > 0 ? hkManager.todayMaxHR : (hkManager.todayRHR > 0 ? hkManager.todayRHR + 65.0 : 140.0),
+                steps: hkManager.todaySteps,
+                respiratoryRate: hkManager.todayRespiratoryRate,
+                oxygenSaturation: hkManager.todayOxygenSaturation,
+                bodyTemperature: hkManager.todayBodyTemperature
             )
             metrics.append(todayMetric)
         }
@@ -101,7 +115,11 @@ struct SleepDetailView: View {
                 remMinutes: rem,
                 activeCalories: hkManager.todayActiveCalories,
                 averageHR: hkManager.todayAverageHR > 0 ? hkManager.todayAverageHR : (hkManager.todayRHR > 0 ? hkManager.todayRHR + 20.0 : 80.0),
-                maxHR: hkManager.todayMaxHR > 0 ? hkManager.todayMaxHR : (hkManager.todayRHR > 0 ? hkManager.todayRHR + 65.0 : 140.0)
+                maxHR: hkManager.todayMaxHR > 0 ? hkManager.todayMaxHR : (hkManager.todayRHR > 0 ? hkManager.todayRHR + 65.0 : 140.0),
+                steps: hkManager.todaySteps,
+                respiratoryRate: hkManager.todayRespiratoryRate,
+                oxygenSaturation: hkManager.todayOxygenSaturation,
+                bodyTemperature: hkManager.todayBodyTemperature
             )
             last7.append(todayMetric)
             if last7.count > 7 { last7.removeFirst() }
@@ -130,9 +148,9 @@ struct SleepDetailView: View {
             let base = isScore ? Double(score) : duration
             let rawBase = base > 0 ? base : (isScore ? 80.0 : 8.0)
             let points = isScore
-                ? [0.0, rawBase * 0.45, rawBase * 0.78, rawBase * 0.88, rawBase * 0.94, rawBase] // Frontloaded deep sleep quality
-                : [0.0, rawBase * 0.2, rawBase * 0.4, rawBase * 0.6, rawBase * 0.8, rawBase]     // Linear elapsed duration hours
-            let labels = ["11pm", "1am", "3am", "5am", "7am", "8am"]
+                ? [rawBase * 0.1, rawBase * 0.5, rawBase * 0.85, rawBase, rawBase, rawBase, rawBase, rawBase]
+                : [rawBase * 0.125, rawBase * 0.5, rawBase * 0.875, rawBase, rawBase, rawBase, rawBase, rawBase]
+            let labels = ["12am", "3am", "6am", "9am", "12pm", "3pm", "6pm", "9pm"]
             return TimeframeData(points: points, labels: labels, average: rawBase)
             
         case .week:
@@ -140,21 +158,19 @@ struct SleepDetailView: View {
             let points = last7.map { isScore ? Double($0.sleepScore) : $0.sleepDuration }
             let formatter = DateFormatter()
             formatter.dateFormat = "E"
-            let labels = last7.map { String(formatter.string(from: $0.date).prefix(1)) }
+            let labels = last7.map { formatter.string(from: $0.date) }
             let average = points.isEmpty ? 0.0 : points.reduce(0, +) / Double(points.count)
             return TimeframeData(points: points, labels: labels, average: average)
             
         case .month:
             let last30 = filteredMetrics.filter { isScore ? $0.sleepScore > 0 : $0.sleepDuration > 0 }
             let points = last30.map { isScore ? Double($0.sleepScore) : $0.sleepDuration }
-            let formatter = DateFormatter()
-            formatter.dateFormat = "d"
             let labels = last30.enumerated().map { index, m in
-                if index % 5 == 0 || index == last30.count - 1 {
-                    return formatter.string(from: m.date)
-                } else {
-                    return ""
-                }
+                if index == 3 { return "Week 1" }
+                else if index == 10 { return "Week 2" }
+                else if index == 17 { return "Week 3" }
+                else if index == 24 { return "Week 4" }
+                else { return "" }
             }
             let average = points.isEmpty ? 0.0 : points.reduce(0, +) / Double(points.count)
             return TimeframeData(points: points, labels: labels, average: average)
@@ -180,7 +196,7 @@ struct SleepDetailView: View {
             let formatter = DateFormatter()
             formatter.dateFormat = "MMM"
             let labels = sortedMonths.map { month in
-                String(formatter.string(from: monthlyDates[month]!).prefix(1))
+                formatter.string(from: monthlyDates[month]!)
             }
             let average = points.isEmpty ? 0.0 : points.reduce(0, +) / Double(points.count)
             return TimeframeData(points: points, labels: labels, average: average)
@@ -435,15 +451,33 @@ struct SleepDetailView: View {
                         let avgDeep = filteredMetrics.isEmpty ? deep : (filteredMetrics.map { $0.deepMinutes }.reduce(0.0, +) / Double(filteredMetrics.count))
                         let avgRem = filteredMetrics.isEmpty ? rem : (filteredMetrics.map { $0.remMinutes }.reduce(0.0, +) / Double(filteredMetrics.count))
                         
-                        let totalMinutes = (avgDuration * 60.0 > 0) ? avgDuration * 60.0 : 480.0
-                        let deepRatio = avgDeep / totalMinutes
-                        let remRatio = avgRem / totalMinutes
-                        let lightRatio = max(0.1, 1.0 - deepRatio - remRatio - 0.05)
+                        let awakeMins: Double = {
+                            if selectedTimeframe == .day {
+                                let awakeSamples = hkManager.todaySleepStages.filter { $0.stage == 0 }
+                                let totalAwakeSecs = awakeSamples.reduce(0.0) { sum, sample in
+                                    sum + sample.endDate.timeIntervalSince(sample.startDate)
+                                }
+                                return totalAwakeSecs > 0 ? totalAwakeSecs / 60.0 : (duration > 0 ? 24.0 : 0.0)
+                            } else {
+                                return avgDuration > 0 ? 24.0 : 0.0
+                            }
+                        }()
+                        
+                        let deepMins = avgDeep
+                        let remMins = avgRem
+                        let lightMins = max(0.0, (avgDuration * 60.0) - deepMins - remMins)
+                        
+                        let totalSessionMinutes = awakeMins + lightMins + remMins + deepMins
+                        
+                        let awakeRatio = totalSessionMinutes > 0 ? awakeMins / totalSessionMinutes : 0.05
+                        let lightRatio = totalSessionMinutes > 0 ? lightMins / totalSessionMinutes : 0.60
+                        let remRatio = totalSessionMinutes > 0 ? remMins / totalSessionMinutes : 0.20
+                        let deepRatio = totalSessionMinutes > 0 ? deepMins / totalSessionMinutes : 0.15
                         
                         GeometryReader { geo in
                             HStack(spacing: 0) {
                                 Color.orange.opacity(0.8)
-                                    .frame(width: geo.size.width * 0.05)
+                                    .frame(width: geo.size.width * CGFloat(awakeRatio))
                                 Theme.Colors.sleepLight
                                     .frame(width: geo.size.width * CGFloat(lightRatio))
                                 Theme.Colors.sleepREM
@@ -455,19 +489,16 @@ struct SleepDetailView: View {
                         }
                         .frame(height: 24)
                         
-                        let awakeMins = avgDuration > 0 ? 24.0 : 0.0
-                        let lightMins = max(0.0, totalMinutes - avgDeep - avgRem - awakeMins)
-                        
-                        let deepPct = totalMinutes > 0 ? Int((avgDeep / totalMinutes) * 100) : 0
-                        let remPct = totalMinutes > 0 ? Int((avgRem / totalMinutes) * 100) : 0
-                        let lightPct = totalMinutes > 0 ? Int((lightMins / totalMinutes) * 100) : 0
-                        let awakePct = totalMinutes > 0 ? max(1, 100 - deepPct - remPct - lightPct) : 0
+                        let deepPct = totalSessionMinutes > 0 ? Int(round((deepMins / totalSessionMinutes) * 100)) : 0
+                        let remPct = totalSessionMinutes > 0 ? Int(round((remMins / totalSessionMinutes) * 100)) : 0
+                        let lightPct = totalSessionMinutes > 0 ? Int(round((lightMins / totalSessionMinutes) * 100)) : 0
+                        let awakePct = totalSessionMinutes > 0 ? max(0, 100 - deepPct - remPct - lightPct) : 0
                         
                         LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
                             SleepStageCard(stageName: "Awake", minutes: awakeMins, percentage: awakePct, color: Color.orange, icon: "sun.max.fill")
                             SleepStageCard(stageName: "Light Sleep", minutes: lightMins, percentage: lightPct, color: Theme.Colors.sleepLight, icon: "moon.fill")
-                            SleepStageCard(stageName: "REM Sleep", minutes: avgRem, percentage: remPct, color: Theme.Colors.sleepREM, icon: "sparkles")
-                            SleepStageCard(stageName: "Deep Sleep", minutes: avgDeep, percentage: deepPct, color: Theme.Colors.sleepDeep, icon: "moon.stars.fill")
+                            SleepStageCard(stageName: "REM Sleep", minutes: remMins, percentage: remPct, color: Theme.Colors.sleepREM, icon: "sparkles")
+                            SleepStageCard(stageName: "Deep Sleep", minutes: deepMins, percentage: deepPct, color: Theme.Colors.sleepDeep, icon: "moon.stars.fill")
                         }
                         .padding(.top, 8)
                     }

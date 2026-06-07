@@ -7,8 +7,16 @@ struct RecoveryDetailView: View {
     let rhr: Double
     
     @State private var selectedTimeframe: Timeframe = .day
-    @State private var selectedGraphTab: Int = 0 // 0: HRV SDNN, 1: Resting HR
+    @State private var selectedGraphTab: Int
     @State private var showAlgorithmDetails = false
+    
+    init(hkManager: HealthKitManager, score: Int, hrv: Double, rhr: Double, initialTab: Int = 0) {
+        self.hkManager = hkManager
+        self.score = score
+        self.hrv = hrv
+        self.rhr = rhr
+        self._selectedGraphTab = State(initialValue: initialTab)
+    }
     
     private var historicalMetrics: [DailyMetrics] {
         hkManager.historicalMetrics
@@ -43,7 +51,11 @@ struct RecoveryDetailView: View {
                 remMinutes: hkManager.todayRemMinutes,
                 activeCalories: hkManager.todayActiveCalories,
                 averageHR: hkManager.todayAverageHR > 0 ? hkManager.todayAverageHR : (hkManager.todayRHR > 0 ? hkManager.todayRHR + 20.0 : 80.0),
-                maxHR: hkManager.todayMaxHR > 0 ? hkManager.todayMaxHR : (hkManager.todayRHR > 0 ? hkManager.todayRHR + 65.0 : 140.0)
+                maxHR: hkManager.todayMaxHR > 0 ? hkManager.todayMaxHR : (hkManager.todayRHR > 0 ? hkManager.todayRHR + 65.0 : 140.0),
+                steps: hkManager.todaySteps,
+                respiratoryRate: hkManager.todayRespiratoryRate,
+                oxygenSaturation: hkManager.todayOxygenSaturation,
+                bodyTemperature: hkManager.todayBodyTemperature
             )
             metrics.append(todayMetric)
         }
@@ -99,9 +111,9 @@ struct RecoveryDetailView: View {
             let rawVal = isHRV ? hrv : rhr
             let baseVal = rawVal > 0 ? rawVal : (isHRV ? 65.0 : 60.0)
             let points = isHRV
-                ? [baseVal - 6.0, baseVal - 2.0, baseVal + 5.0, baseVal + 8.0, baseVal + 2.0, baseVal] // HRV peaks overnight
-                : [baseVal + 4.0, baseVal + 2.0, baseVal - 4.0, baseVal - 6.0, baseVal - 1.0, baseVal] // RHR dips overnight
-            let labels = ["12am", "2am", "4am", "6am", "8am", "10am"]
+                ? [baseVal - 4.0, baseVal + 6.0, baseVal + 8.0, baseVal + 2.0, baseVal - 1.0, baseVal - 2.0, baseVal, baseVal - 3.0]
+                : [baseVal + 3.0, baseVal - 5.0, baseVal - 7.0, baseVal - 2.0, baseVal + 1.0, baseVal + 2.0, baseVal, baseVal + 2.0]
+            let labels = ["12am", "3am", "6am", "9am", "12pm", "3pm", "6pm", "9pm"]
             return TimeframeData(points: points, labels: labels, average: baseVal)
             
         case .week:
@@ -109,21 +121,19 @@ struct RecoveryDetailView: View {
             let points = last7.map { isHRV ? $0.hrv : $0.rhr }
             let formatter = DateFormatter()
             formatter.dateFormat = "E"
-            let labels = last7.map { String(formatter.string(from: $0.date).prefix(1)) }
+            let labels = last7.map { formatter.string(from: $0.date) }
             let average = points.isEmpty ? 0.0 : points.reduce(0, +) / Double(points.count)
             return TimeframeData(points: points, labels: labels, average: average)
             
         case .month:
             let last30 = filteredMetrics.filter { isHRV ? $0.hrv > 0 : $0.rhr > 0 }
             let points = last30.map { isHRV ? $0.hrv : $0.rhr }
-            let formatter = DateFormatter()
-            formatter.dateFormat = "d"
             let labels = last30.enumerated().map { index, m in
-                if index % 5 == 0 || index == last30.count - 1 {
-                    return formatter.string(from: m.date)
-                } else {
-                    return ""
-                }
+                if index == 3 { return "Week 1" }
+                else if index == 10 { return "Week 2" }
+                else if index == 17 { return "Week 3" }
+                else if index == 24 { return "Week 4" }
+                else { return "" }
             }
             let average = points.isEmpty ? 0.0 : points.reduce(0, +) / Double(points.count)
             return TimeframeData(points: points, labels: labels, average: average)
@@ -149,7 +159,7 @@ struct RecoveryDetailView: View {
             let formatter = DateFormatter()
             formatter.dateFormat = "MMM"
             let labels = sortedMonths.map { month in
-                String(formatter.string(from: monthlyDates[month]!).prefix(1))
+                formatter.string(from: monthlyDates[month]!)
             }
             let average = points.isEmpty ? 0.0 : points.reduce(0, +) / Double(points.count)
             return TimeframeData(points: points, labels: labels, average: average)

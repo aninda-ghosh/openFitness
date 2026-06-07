@@ -6,12 +6,14 @@
 //
 
 import SwiftUI
+import SwiftData
 
 @main
 struct openFitnessApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .modelContainer(LocalPersistenceManager.shared.container)
         }
     }
 }

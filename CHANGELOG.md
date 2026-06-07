@@ -6,7 +6,19 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [Unreleased]
+## [0.2.0] — 2026-06-07
+
+### Added
+- Dedicated deep-dive `WorkoutAnalysisDetailView` page featuring timeframe selectors (Day, Week, Month, Year), statistics grids, heart rate intensity distribution cards, and a history list.
+- Premium weekly `WorkoutPatternCard` on the Dashboard showing total workouts, duration, active calories, average strain, and a horizontal stacked capsule bar representing intensity zone distribution.
+
+### Changed
+- Standardized and aligned timeframe X-axis labels across all metric detail view charts (Activity, Sleep, Recovery, Stress/HR, Vitals, Energy Bank, and Workout Analysis):
+  - **Day**: 8 segments of 3 hours each (`["12am", "3am", "6am", "9am", "12pm", "3pm", "6pm", "9pm"]`).
+  - **Week**: 7 days showing 3-letter weekday names instead of single-letter prefixes.
+  - **Month**: 4 weeks labeled as "Week 1", "Week 2", "Week 3", and "Week 4" positioned at week boundaries (indices 3, 10, 17, and 24).
+  - **Year**: 12 months showing 3-letter month abbreviations instead of single-letter prefixes.
+- Reordered the main dashboard cards: moved the `ECGCardView` to the very bottom of the ScrollView.
 
 ---
 

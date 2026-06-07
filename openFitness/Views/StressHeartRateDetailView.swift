@@ -156,7 +156,11 @@ struct StressHeartRateDetailView: View {
                 remMinutes: hkManager.todayRemMinutes,
                 activeCalories: hkManager.todayActiveCalories,
                 averageHR: hkManager.todayAverageHR > 0 ? hkManager.todayAverageHR : (hkManager.todayRHR > 0 ? hkManager.todayRHR + 20.0 : 80.0),
-                maxHR: hkManager.todayMaxHR > 0 ? hkManager.todayMaxHR : (hkManager.todayRHR > 0 ? hkManager.todayRHR + 65.0 : 140.0)
+                maxHR: hkManager.todayMaxHR > 0 ? hkManager.todayMaxHR : (hkManager.todayRHR > 0 ? hkManager.todayRHR + 65.0 : 140.0),
+                steps: hkManager.todaySteps,
+                respiratoryRate: hkManager.todayRespiratoryRate,
+                oxygenSaturation: hkManager.todayOxygenSaturation,
+                bodyTemperature: hkManager.todayBodyTemperature
             )
             metrics.append(todayMetric)
         }
@@ -192,15 +196,14 @@ struct StressHeartRateDetailView: View {
             labels = [] // Handled in the guard block above
         case .week:
             formatter.dateFormat = "E"
-            labels = fMetrics.map { String(formatter.string(from: $0.date).prefix(1)) }
+            labels = fMetrics.map { formatter.string(from: $0.date) }
         case .month:
-            formatter.dateFormat = "d"
             labels = fMetrics.enumerated().map { index, m in
-                if index % 5 == 0 || index == fMetrics.count - 1 {
-                    return formatter.string(from: m.date)
-                } else {
-                    return ""
-                }
+                if index == 3 { return "Week 1" }
+                else if index == 10 { return "Week 2" }
+                else if index == 17 { return "Week 3" }
+                else if index == 24 { return "Week 4" }
+                else { return "" }
             }
         case .year:
             formatter.dateFormat = "MMM"
@@ -228,7 +231,7 @@ struct StressHeartRateDetailView: View {
                 (monthlySums[month] ?? 0.0) / (monthlyCounts[month] ?? 1.0)
             }
             let labelsYear = sortedMonths.map { month in
-                String(formatter.string(from: monthlyDates[month]!).prefix(1))
+                formatter.string(from: monthlyDates[month]!)
             }
             let averageYear = pointsYear.isEmpty ? 0.0 : pointsYear.reduce(0, +) / Double(pointsYear.count)
             return TimeframeData(points: pointsYear, labels: labelsYear, average: averageYear)
@@ -262,15 +265,14 @@ struct StressHeartRateDetailView: View {
             labels = [] // Handled in the guard block above
         case .week:
             formatter.dateFormat = "E"
-            labels = fMetrics.map { String(formatter.string(from: $0.date).prefix(1)) }
+            labels = fMetrics.map { formatter.string(from: $0.date) }
         case .month:
-            formatter.dateFormat = "d"
             labels = fMetrics.enumerated().map { index, m in
-                if index % 5 == 0 || index == fMetrics.count - 1 {
-                    return formatter.string(from: m.date)
-                } else {
-                    return ""
-                }
+                if index == 3 { return "Week 1" }
+                else if index == 10 { return "Week 2" }
+                else if index == 17 { return "Week 3" }
+                else if index == 24 { return "Week 4" }
+                else { return "" }
             }
         case .year:
             formatter.dateFormat = "MMM"
@@ -291,7 +293,7 @@ struct StressHeartRateDetailView: View {
                 (monthlySums[month] ?? 0.0) / (monthlyCounts[month] ?? 1.0)
             }
             let labelsYear = sortedMonths.map { month in
-                String(formatter.string(from: monthlyDates[month]!).prefix(1))
+                formatter.string(from: monthlyDates[month]!)
             }
             let averageYear = pointsYear.isEmpty ? 0.0 : pointsYear.reduce(0, +) / Double(pointsYear.count)
             return TimeframeData(points: pointsYear, labels: labelsYear, average: averageYear)

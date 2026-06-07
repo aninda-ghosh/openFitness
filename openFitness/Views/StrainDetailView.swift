@@ -45,7 +45,11 @@ struct StrainDetailView: View {
                 remMinutes: hkManager.todayRemMinutes,
                 activeCalories: hkManager.todayActiveCalories,
                 averageHR: hkManager.todayAverageHR > 0 ? hkManager.todayAverageHR : (hkManager.todayRHR > 0 ? hkManager.todayRHR + 20.0 : 80.0),
-                maxHR: hkManager.todayMaxHR > 0 ? hkManager.todayMaxHR : (hkManager.todayRHR > 0 ? hkManager.todayRHR + 65.0 : 140.0)
+                maxHR: hkManager.todayMaxHR > 0 ? hkManager.todayMaxHR : (hkManager.todayRHR > 0 ? hkManager.todayRHR + 65.0 : 140.0),
+                steps: hkManager.todaySteps,
+                respiratoryRate: hkManager.todayRespiratoryRate,
+                oxygenSaturation: hkManager.todayOxygenSaturation,
+                bodyTemperature: hkManager.todayBodyTemperature
             )
             metrics.append(todayMetric)
         }
@@ -114,7 +118,11 @@ struct StrainDetailView: View {
             remMinutes: hkManager.todayRemMinutes,
             activeCalories: hkManager.todayActiveCalories,
             averageHR: hkManager.todayAverageHR > 0 ? hkManager.todayAverageHR : (hkManager.todayRHR > 0 ? hkManager.todayRHR + 20.0 : 80.0),
-            maxHR: hkManager.todayMaxHR > 0 ? hkManager.todayMaxHR : (hkManager.todayRHR > 0 ? hkManager.todayRHR + 65.0 : 140.0)
+            maxHR: hkManager.todayMaxHR > 0 ? hkManager.todayMaxHR : (hkManager.todayRHR > 0 ? hkManager.todayRHR + 65.0 : 140.0),
+            steps: hkManager.todaySteps,
+            respiratoryRate: hkManager.todayRespiratoryRate,
+            oxygenSaturation: hkManager.todayOxygenSaturation,
+            bodyTemperature: hkManager.todayBodyTemperature
         )] : filteredMetrics
         
         var detraining = 0
@@ -158,36 +166,170 @@ struct StrainDetailView: View {
         ]
     }
     
+    struct WorkoutTypeDistribution: Identifiable {
+        let id = UUID()
+        let name: String
+        let duration: Double
+        let calories: Double
+        let count: Int
+        let color: Color
+    }
+    
+    private var workoutDistribution: [WorkoutTypeDistribution] {
+        let workoutsList = hkManager.timeframeWorkouts
+        var grouped: [String: (duration: Double, calories: Double, count: Int)] = [:]
+        for w in workoutsList {
+            let current = grouped[w.name, default: (0.0, 0.0, 0)]
+            grouped[w.name] = (
+                duration: current.duration + w.durationMinutes,
+                calories: current.calories + w.activeEnergyBurned,
+                count: current.count + 1
+            )
+        }
+        
+        return grouped.map { name, stats in
+            WorkoutTypeDistribution(
+                name: name,
+                duration: stats.duration,
+                calories: stats.calories,
+                count: stats.count,
+                color: colorForWorkoutType(name)
+            )
+        }.sorted { $0.duration > $1.duration }
+    }
+    
+    private func colorForWorkoutType(_ name: String) -> Color {
+        let nameLower = name.lowercased()
+        if nameLower.contains("run") {
+            return Color.red
+        } else if nameLower.contains("walk") {
+            return Color.green
+        } else if nameLower.contains("cycle") || nameLower.contains("bike") {
+            return Color.blue
+        } else if nameLower.contains("strength") || nameLower.contains("weight") || nameLower.contains("resistance") {
+            return Color.orange
+        } else if nameLower.contains("swim") || nameLower.contains("pool") || nameLower.contains("water") {
+            return Color.teal
+        } else if nameLower.contains("yoga") || nameLower.contains("stretch") || nameLower.contains("pilates") {
+            return Color.purple
+        } else if nameLower.contains("hiit") || nameLower.contains("cardio") || nameLower.contains("crossfit") {
+            return Color.pink
+        } else {
+            return Color.cyan
+        }
+    }
+    
+    private func formatDuration(_ mins: Double) -> String {
+        let hours = Int(mins) / 60
+        let minutes = Int(mins) % 60
+        if hours > 0 {
+            return "\(hours)h \(minutes)m"
+        } else {
+            return "\(minutes)m"
+        }
+    }
+    
     private func getStrainData() -> TimeframeData {
         let calendar = Calendar.current
         
         switch selectedTimeframe {
         case .day:
-            let base = strain
-            let points = [0.0, 0.0, 0.0, base * 0.3, base * 0.7, base * 0.7, base * 0.9, base]
+            let startOfDay = calendar.startOfDay(for: Date())
+            let now = Date()
+            
+            let energySamples = LocalPersistenceManager.shared.fetchSamples(
+                typeIdentifier: "HKQuantityTypeIdentifierActiveEnergyBurned",
+                from: startOfDay,
+                to: now
+            )
+            
+            var hourlyLoad = [Double](repeating: 0.0, count: 24)
+            for sample in energySamples {
+                let hour = calendar.component(.hour, from: sample.startDate)
+                if hour >= 0 && hour < 24 {
+                    hourlyLoad[hour] += sample.value
+                }
+            }
+            
+            let todayWorkouts = hkManager.timeframeWorkouts.filter { calendar.isDate($0.date, inSameDayAs: now) }
+            for w in todayWorkouts {
+                let hour = calendar.component(.hour, from: w.date)
+                if hour >= 0 && hour < 24 {
+                    let maxHR = 190.0
+                    let hrRatio = w.averageHeartRate / maxHR
+                    let zoneMultiplier: Double
+                    if hrRatio >= 0.9 { zoneMultiplier = 5.0 }
+                    else if hrRatio >= 0.8 { zoneMultiplier = 4.0 }
+                    else if hrRatio >= 0.7 { zoneMultiplier = 3.0 }
+                    else if hrRatio >= 0.6 { zoneMultiplier = 2.0 }
+                    else { zoneMultiplier = 1.0 }
+                    
+                    let workoutTRIMP = w.durationMinutes * zoneMultiplier
+                    hourlyLoad[hour] += workoutTRIMP * 10.0
+                }
+            }
+            
+            var cumulativeLoad = [Double](repeating: 0.0, count: 24)
+            var currentLoad = 0.0
+            for hour in 0...23 {
+                currentLoad += hourlyLoad[hour]
+                cumulativeLoad[hour] = currentLoad
+            }
+            
+            let totalLoad = cumulativeLoad[23]
+            let targetStrain = strain
+            var targetTRIMP = 0.0
+            if targetStrain > 0 {
+                let clampedStrain = min(20.9, targetStrain)
+                targetTRIMP = -log(1.0 - (clampedStrain / 21.0)) / 0.0035
+            }
+            
+            var strainAtHour = [Double](repeating: 0.0, count: 24)
+            for hour in 0...23 {
+                if totalLoad > 0 {
+                    let ratio = cumulativeLoad[hour] / totalLoad
+                    let hourlyTRIMP = ratio * targetTRIMP
+                    strainAtHour[hour] = PhysiologicalCalculators.calculateStrain(eTRIMP: hourlyTRIMP)
+                } else {
+                    if hour < 7 {
+                        strainAtHour[hour] = 0.0
+                    } else if hour > 22 {
+                        strainAtHour[hour] = targetStrain
+                    } else {
+                        let awakeProgress = Double(hour - 7) / 15.0
+                        let hourlyTRIMP = awakeProgress * targetTRIMP
+                        strainAtHour[hour] = PhysiologicalCalculators.calculateStrain(eTRIMP: hourlyTRIMP)
+                    }
+                }
+            }
+            
+            let segmentHours = [0, 3, 6, 9, 12, 15, 18, 21]
             let labels = ["12am", "3am", "6am", "9am", "12pm", "3pm", "6pm", "9pm"]
-            return TimeframeData(points: points, labels: labels, average: base)
+            var points: [Double] = []
+            for hour in segmentHours {
+                points.append(strainAtHour[hour])
+            }
+            
+            return TimeframeData(points: points, labels: labels, average: targetStrain)
             
         case .week:
             let last7 = filteredMetrics
             let points = last7.map { $0.strainScore }
             let formatter = DateFormatter()
             formatter.dateFormat = "E"
-            let labels = last7.map { String(formatter.string(from: $0.date).prefix(1)) }
+            let labels = last7.map { formatter.string(from: $0.date) }
             let average = points.isEmpty ? 0.0 : points.reduce(0, +) / Double(points.count)
             return TimeframeData(points: points, labels: labels, average: average)
             
         case .month:
             let last30 = filteredMetrics
             let points = last30.map { $0.strainScore }
-            let formatter = DateFormatter()
-            formatter.dateFormat = "d"
             let labels = last30.enumerated().map { index, m in
-                if index % 5 == 0 || index == last30.count - 1 {
-                    return formatter.string(from: m.date)
-                } else {
-                    return ""
-                }
+                if index == 3 { return "Week 1" }
+                else if index == 10 { return "Week 2" }
+                else if index == 17 { return "Week 3" }
+                else if index == 24 { return "Week 4" }
+                else { return "" }
             }
             let average = points.isEmpty ? 0.0 : points.reduce(0, +) / Double(points.count)
             return TimeframeData(points: points, labels: labels, average: average)
@@ -211,7 +353,7 @@ struct StrainDetailView: View {
             let formatter = DateFormatter()
             formatter.dateFormat = "MMM"
             let labels = sortedMonths.map { month in
-                String(formatter.string(from: monthlyDates[month]!).prefix(1))
+                formatter.string(from: monthlyDates[month]!)
             }
             let average = points.isEmpty ? 0.0 : points.reduce(0, +) / Double(points.count)
             return TimeframeData(points: points, labels: labels, average: average)
@@ -334,6 +476,108 @@ struct StrainDetailView: View {
                     .glassCard()
                     .padding(.horizontal)
                     
+                    // 2. Workout Breakdown Card
+                    let totalDuration = hkManager.timeframeWorkouts.reduce(0.0) { $0 + $1.durationMinutes }
+                    let totalCalories = hkManager.timeframeWorkouts.reduce(0.0) { $0 + $1.activeEnergyBurned }
+                    
+                    VStack(alignment: .leading, spacing: 14) {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("WORKOUT BREAKDOWN")
+                                    .font(Theme.Typography.cardTitle)
+                                    .foregroundColor(.white.opacity(0.5))
+                                Text(selectedTimeframe == .day ? "Today's Workouts" : (selectedTimeframe == .week ? "Weekly Workout Summary" : (selectedTimeframe == .month ? "Monthly Workout Summary" : "Annual Workout Summary")))
+                                    .font(Theme.Typography.roundedFont(size: 15, weight: .bold))
+                                    .foregroundColor(.white)
+                            }
+                            Spacer()
+                            Image(systemName: "figure.run.square.stack")
+                                .font(.title3)
+                                .foregroundColor(Theme.Colors.strainHigh)
+                        }
+                        
+                        if hkManager.timeframeWorkouts.isEmpty {
+                            Text("No workouts recorded in this timeframe.")
+                                .font(Theme.Typography.roundedFont(size: 13, weight: .medium))
+                                .foregroundColor(.white.opacity(0.4))
+                                .padding(.vertical, 8)
+                        } else {
+                            HStack(spacing: 20) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("WORKOUTS")
+                                        .font(Theme.Typography.roundedFont(size: 9, weight: .bold))
+                                        .foregroundColor(.white.opacity(0.4))
+                                    Text("\(hkManager.timeframeWorkouts.count)")
+                                        .font(Theme.Typography.roundedFont(size: 18, weight: .bold))
+                                        .foregroundColor(.white)
+                                }
+                                
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("TOTAL TIME")
+                                        .font(Theme.Typography.roundedFont(size: 9, weight: .bold))
+                                        .foregroundColor(.white.opacity(0.4))
+                                    Text(formatDuration(totalDuration))
+                                        .font(Theme.Typography.roundedFont(size: 18, weight: .bold))
+                                        .foregroundColor(.white)
+                                }
+                                
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("TOTAL CALORIES")
+                                        .font(Theme.Typography.roundedFont(size: 9, weight: .bold))
+                                        .foregroundColor(.white.opacity(0.4))
+                                    Text(String(format: "%.0f kcal", totalCalories))
+                                        .font(Theme.Typography.roundedFont(size: 18, weight: .bold))
+                                        .foregroundColor(.white)
+                                }
+                            }
+                            .padding(.vertical, 4)
+                            
+                            GeometryReader { geometry in
+                                HStack(spacing: 2) {
+                                    let dists = workoutDistribution
+                                    ForEach(dists) { dist in
+                                        let width = max(4.0, geometry.size.width * CGFloat(dist.duration / totalDuration) - 2.0)
+                                        RoundedRectangle(cornerRadius: 3)
+                                            .fill(dist.color)
+                                            .frame(width: width)
+                                    }
+                                }
+                            }
+                            .frame(height: 12)
+                            .cornerRadius(6)
+                            .padding(.vertical, 4)
+                            
+                            VStack(spacing: 10) {
+                                ForEach(workoutDistribution) { dist in
+                                    HStack {
+                                        Circle()
+                                            .fill(dist.color)
+                                            .frame(width: 8, height: 8)
+                                        
+                                        Text(dist.name)
+                                            .font(Theme.Typography.roundedFont(size: 13, weight: .semibold))
+                                            .foregroundColor(.white)
+                                        
+                                        Spacer()
+                                        
+                                        Text("\(dist.count) \(dist.count == 1 ? "session" : "sessions")")
+                                            .font(Theme.Typography.roundedFont(size: 12, weight: .regular))
+                                            .foregroundColor(.white.opacity(0.4))
+                                        
+                                        Spacer().frame(width: 12)
+                                        
+                                        Text(formatDuration(dist.duration))
+                                            .font(Theme.Typography.roundedFont(size: 13, weight: .bold))
+                                            .foregroundColor(.white.opacity(0.8))
+                                    }
+                                }
+                            }
+                            .padding(.top, 4)
+                        }
+                    }
+                    .glassCard()
+                    .padding(.horizontal)
+                    
                     // Historical Trend Chart
                     let trendData = getStrainData()
                     VStack(alignment: .leading, spacing: 14) {
@@ -347,7 +591,13 @@ struct StrainDetailView: View {
                                 .foregroundColor(.white.opacity(0.5))
                         }
                         
-                        CustomLineGraph(points: trendData.points, labels: trendData.labels, lineColor: Theme.Colors.strainHigh, gradientColors: [Theme.Colors.strainHigh.opacity(0.2), .clear])
+                        CustomLineGraph(
+                            points: trendData.points,
+                            labels: trendData.labels,
+                            lineColor: Theme.Colors.strainHigh,
+                            gradientColors: [Theme.Colors.strainHigh.opacity(0.2), .clear],
+                            visibleCount: selectedTimeframe == .day ? (Calendar.current.component(.hour, from: Date()) / 3 + 1) : nil
+                        )
                             .frame(height: 140)
                             .padding(.vertical, 8)
                         
@@ -453,5 +703,11 @@ struct StrainDetailView: View {
         }
         .navigationTitle("Cardio Strain")
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            hkManager.fetchWorkoutsForTimeframe(timeframe: selectedTimeframe)
+        }
+        .onChange(of: selectedTimeframe) { newTimeframe in
+            hkManager.fetchWorkoutsForTimeframe(timeframe: newTimeframe)
+        }
     }
 }
