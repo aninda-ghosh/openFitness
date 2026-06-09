@@ -4,20 +4,30 @@ struct StressHeartRateDetailView: View {
     @ObservedObject var hkManager: HealthKitManager
     
     @State private var selectedTimeframe: Timeframe = .day // Default to D (Daily)
-    @State private var selectedGraphTab: Int = 0 // 0: Stress Index, 1: Resting HR
+    @State private var selectedGraphTab: Int = 1 // 0: Stress Index, 1: Resting HR
     @State private var showAlgorithmDetails = false
-    
+    @State private var selectedDay: Date = Calendar.current.startOfDay(for: Date())
+
+    private var cal: Calendar { Calendar.current }
+    private var isViewingToday: Bool { cal.isDateInToday(selectedDay) }
+    private var dayMetrics: DailyMetrics? {
+        guard !isViewingToday else { return nil }
+        return historicalMetrics.first { cal.isDate($0.date, inSameDayAs: selectedDay) }
+    }
+
     private var historicalMetrics: [DailyMetrics] {
         hkManager.historicalMetrics
     }
     
     // 1. Recalculated dynamic stress average based on timeframe
     private var displayStress: Int {
-        if selectedTimeframe == .day {
-            return hkManager.todayStressAverage
+        if selectedTimeframe != .day {
+            let data = getStressData()
+            return Int(data.average)
         }
-        let data = getStressData()
-        return Int(data.average)
+        if isViewingToday { return hkManager.todayStressAverage }
+        guard let dm = dayMetrics, dm.hrv > 0 else { return 0 }
+        return max(5, min(95, Int(100.0 - dm.hrv * 0.95)))
     }
     
     private var stressClassification: String {
@@ -52,22 +62,16 @@ struct StressHeartRateDetailView: View {
     // 2. Dynamic stress range based on timeframe
     private var displayStressRange: (lowest: Int, highest: Int) {
         if selectedTimeframe == .day {
-            return (hkManager.todayStressLowest, hkManager.todayStressHighest)
+            if isViewingToday { return (hkManager.todayStressLowest, hkManager.todayStressHighest) }
+            guard let dm = dayMetrics, dm.hrv > 0 else { return (0, 0) }
+            let stress = max(5.0, min(95.0, 100.0 - dm.hrv * 0.95))
+            return (max(5, Int(stress - 12)), min(98, Int(stress + 15)))
         }
-        
         let hrvs = filteredMetrics.map { $0.hrv }.filter { $0 > 0 }
-        if hrvs.isEmpty {
-            return (hkManager.todayStressLowest, hkManager.todayStressHighest)
-        }
-        
-        let stresses = hrvs.map { hrv -> Double in
-            max(5.0, min(95.0, 100.0 - (hrv * 0.95)))
-        }
-        
+        if hrvs.isEmpty { return (0, 0) }
+        let stresses = hrvs.map { hrv -> Double in max(5.0, min(95.0, 100.0 - hrv * 0.95)) }
         let avgStress = stresses.reduce(0.0, +) / Double(stresses.count)
-        let lowest = max(5, Int(avgStress - 12))
-        let highest = min(98, Int(avgStress + 15))
-        return (lowest, highest)
+        return (max(5, Int(avgStress - 12)), min(98, Int(avgStress + 15)))
     }
     
     private var rangeLabel: String {
@@ -75,10 +79,14 @@ struct StressHeartRateDetailView: View {
         switch selectedTimeframe {
         case .day:
             return "Today's range: \(range.lowest)% - \(range.highest)%"
+        case .threeDays:
+            return "3-day average range: \(range.lowest)% - \(range.highest)%"
         case .week:
             return "Weekly average range: \(range.lowest)% - \(range.highest)%"
         case .month:
             return "Monthly average range: \(range.lowest)% - \(range.highest)%"
+        case .sixMonths:
+            return "6-month average range: \(range.lowest)% - \(range.highest)%"
         case .year:
             return "Annual average range: \(range.lowest)% - \(range.highest)%"
         }
@@ -94,92 +102,73 @@ struct StressHeartRateDetailView: View {
     // 4. Recalculated Resting HR average based on timeframe
     private var displayRHR: Int {
         if selectedTimeframe == .day {
-            return hkManager.todayRHR > 0 ? Int(hkManager.todayRHR) : 60
+            if isViewingToday { return hkManager.todayRHR > 0 ? Int(hkManager.todayRHR) : 0 }
+            guard let dm = dayMetrics, dm.rhr > 0 else { return 0 }
+            return Int(dm.rhr)
         }
         let rhrs = filteredMetrics.map { $0.rhr }.filter { $0 > 0 }
-        if rhrs.isEmpty {
-            return hkManager.todayRHR > 0 ? Int(hkManager.todayRHR) : 60
-        }
-        return Int(rhrs.reduce(0.0, +) / Double(rhrs.count))
+        return rhrs.isEmpty ? 0 : Int(rhrs.reduce(0.0, +) / Double(rhrs.count))
     }
-    
-    // 5. Recalculated Average HR average based on timeframe
+
+    // 5. Recalculated Average HR based on timeframe
     private var displayAverageHR: Int {
         if selectedTimeframe == .day {
-            return hkManager.todayAverageHR > 0 ? Int(hkManager.todayAverageHR) : 80
+            if isViewingToday { return hkManager.todayAverageHR > 0 ? Int(hkManager.todayAverageHR) : 0 }
+            let start = cal.startOfDay(for: selectedDay)
+            let end = cal.date(byAdding: .day, value: 1, to: start)!
+            let samples = LocalPersistenceManager.shared.fetchSamples(typeIdentifier: "HKQuantityTypeIdentifierHeartRate", from: start, to: end)
+            guard !samples.isEmpty else { return 0 }
+            let sum = samples.reduce(0.0) { $0 + $1.value }
+            return Int(sum / Double(samples.count))
         }
         let avgs = filteredMetrics.map { $0.averageHR }.filter { $0 > 0 }
-        if avgs.isEmpty {
-            return hkManager.todayAverageHR > 0 ? Int(hkManager.todayAverageHR) : 80
-        }
-        return Int(avgs.reduce(0.0, +) / Double(avgs.count))
+        return avgs.isEmpty ? 0 : Int(avgs.reduce(0.0, +) / Double(avgs.count))
     }
-    
-    // 6. Recalculated Max HR average based on timeframe
+
+    // 6. Recalculated Max HR based on timeframe
     private var displayMaxHR: Int {
         if selectedTimeframe == .day {
-            return hkManager.todayMaxHR > 0 ? Int(hkManager.todayMaxHR) : 140
+            if isViewingToday { return hkManager.todayMaxHR > 0 ? Int(hkManager.todayMaxHR) : 0 }
+            let start = cal.startOfDay(for: selectedDay)
+            let end = cal.date(byAdding: .day, value: 1, to: start)!
+            let samples = LocalPersistenceManager.shared.fetchSamples(typeIdentifier: "HKQuantityTypeIdentifierHeartRate", from: start, to: end)
+            guard !samples.isEmpty else { return 0 }
+            return Int(samples.map { $0.value }.max() ?? 0)
         }
         let maxes = filteredMetrics.map { $0.maxHR }.filter { $0 > 0 }
-        if maxes.isEmpty {
-            return hkManager.todayMaxHR > 0 ? Int(hkManager.todayMaxHR) : 140
-        }
-        return Int(maxes.reduce(0.0, +) / Double(maxes.count))
+        return maxes.isEmpty ? 0 : Int(maxes.reduce(0.0, +) / Double(maxes.count))
     }
     
     private var filteredMetrics: [DailyMetrics] {
-        var metrics: [DailyMetrics]
         switch selectedTimeframe {
         case .day:
-            return []
+            // Filter historical metrics to get just the entry matching selectedDay
+            return historicalMetrics.filter { cal.isDate($0.date, inSameDayAs: selectedDay) }
+            
+        case .threeDays:
+            let start = cal.date(byAdding: .day, value: -2, to: selectedDay)!
+            return historicalMetrics.filter { $0.date >= start && $0.date <= selectedDay }
         case .week:
-            metrics = Array(historicalMetrics.suffix(7))
+            let start = cal.date(byAdding: .day, value: -6, to: selectedDay)!
+            return historicalMetrics.filter { $0.date >= start && $0.date <= selectedDay }
         case .month:
-            metrics = Array(historicalMetrics.suffix(30))
+            let start = cal.date(byAdding: .day, value: -29, to: selectedDay)!
+            return historicalMetrics.filter { $0.date >= start && $0.date <= selectedDay }
+        case .sixMonths:
+            let start = cal.date(byAdding: .day, value: -179, to: selectedDay)!
+            return historicalMetrics.filter { $0.date >= start && $0.date <= selectedDay }
         case .year:
-            metrics = historicalMetrics
+            let start = cal.date(byAdding: .day, value: -364, to: selectedDay)!
+            return historicalMetrics.filter { $0.date >= start && $0.date <= selectedDay }
         }
-        
-        let calendar = Calendar.current
-        let todayStart = calendar.startOfDay(for: Date())
-        if !metrics.contains(where: { calendar.isDate($0.date, inSameDayAs: todayStart) }) {
-            let todayMetric = DailyMetrics(
-                date: todayStart,
-                recoveryScore: hkManager.todayRecovery,
-                strainScore: hkManager.todayStrain,
-                sleepScore: hkManager.todaySleepScore,
-                hrv: hkManager.todayHRV,
-                rhr: hkManager.todayRHR,
-                sleepDuration: hkManager.todaySleepHours,
-                sleepNeeded: hkManager.todaySleepNeeded,
-                deepMinutes: hkManager.todayDeepMinutes,
-                remMinutes: hkManager.todayRemMinutes,
-                activeCalories: hkManager.todayActiveCalories,
-                averageHR: hkManager.todayAverageHR > 0 ? hkManager.todayAverageHR : (hkManager.todayRHR > 0 ? hkManager.todayRHR + 20.0 : 80.0),
-                maxHR: hkManager.todayMaxHR > 0 ? hkManager.todayMaxHR : (hkManager.todayRHR > 0 ? hkManager.todayRHR + 65.0 : 140.0),
-                steps: hkManager.todaySteps,
-                respiratoryRate: hkManager.todayRespiratoryRate,
-                oxygenSaturation: hkManager.todayOxygenSaturation,
-                bodyTemperature: hkManager.todayBodyTemperature
-            )
-            metrics.append(todayMetric)
-        }
-        return metrics
     }
     
     private func getStressData() -> TimeframeData {
-        if selectedTimeframe == .day {
-            let base = Double(hkManager.todayStressAverage > 0 ? hkManager.todayStressAverage : 35)
-            // Plot today's stress level fluctuation (hourly)
-            let points = [base * 0.5, base * 0.4, base * 0.9, base * 1.3, base * 0.8, base * 1.1, base * 1.0, base]
-            let labels = ["12am", "3am", "6am", "9am", "12pm", "3pm", "6pm", "9pm"]
-            return TimeframeData(points: points, labels: labels, average: base)
-        }
-        
         let calendar = Calendar.current
         let fMetrics = filteredMetrics
         
-        let points = fMetrics.map { m -> Double in
+        // Explicitly typed helper closure using DailyMetrics
+        let calculateStress: (DailyMetrics) -> Double = { m in
             if m.hrv > 0 {
                 return max(5.0, min(95.0, 100.0 - (m.hrv * 0.95)))
             } else {
@@ -188,39 +177,75 @@ struct StressHeartRateDetailView: View {
                 return max(10.0, min(80.0, baseStress))
             }
         }
+
+        if selectedTimeframe == .day {
+            let labels = ["12am", "3am", "6am", "9am", "12pm", "3pm", "6pm", "9pm"]
+            
+            let todaysStress: Double
+            // Now fMetrics won't be empty! It will find today's data.
+            if let latestMetric = fMetrics.last {
+                todaysStress = calculateStress(latestMetric)
+            } else {
+                todaysStress = Double(displayStress)
+            }
+            
+            guard todaysStress > 0 else { return TimeframeData(points: [], labels: labels, average: 0) }
+            return TimeframeData(points: Array(repeating: todaysStress, count: 8), labels: labels, average: todaysStress)
+        }
         
+        let points = fMetrics.map { calculateStress($0) }
         let formatter = DateFormatter()
         let labels: [String]
+        
         switch selectedTimeframe {
         case .day:
-            labels = [] // Handled in the guard block above
-        case .week:
+            labels = []
+        case .threeDays, .week:
             formatter.dateFormat = "E"
             labels = fMetrics.map { formatter.string(from: $0.date) }
         case .month:
             labels = ["W1", "W2", "W3", "W4"]
+        case .sixMonths:
+            formatter.dateFormat = "MMM"
+            var monthlySums6M: [Int: Double] = [:]
+            var monthlyCounts6M: [Int: Double] = [:]
+            var monthlyDates6M: [Int: Date] = [:]
+            
+            for m in fMetrics {
+                let month = calendar.component(.month, from: m.date)
+                let val = calculateStress(m)
+                
+                monthlySums6M[month, default: 0.0] += val
+                monthlyCounts6M[month, default: 0.0] += 1.0
+                monthlyDates6M[month] = m.date
+            }
+            
+            let sortedMonths6M = monthlyDates6M.keys.sorted { monthlyDates6M[$0]! < monthlyDates6M[$1]! }
+            let points6M = sortedMonths6M.map { month in
+                (monthlySums6M[month] ?? 0.0) / (monthlyCounts6M[month] ?? 1.0)
+            }
+            let labels6M = sortedMonths6M.map { month in
+                formatter.string(from: monthlyDates6M[month]!)
+            }
+            let average6M = points6M.isEmpty ? 0.0 : points6M.reduce(0, +) / Double(points6M.count)
+            return TimeframeData(points: points6M, labels: labels6M, average: average6M)
+            
         case .year:
             formatter.dateFormat = "MMM"
             var monthlySums: [Int: Double] = [:]
             var monthlyCounts: [Int: Double] = [:]
             var monthlyDates: [Int: Date] = [:]
+            
             for m in fMetrics {
                 let month = calendar.component(.month, from: m.date)
-                let val: Double
-                if m.hrv > 0 {
-                    val = max(5.0, min(95.0, 100.0 - (m.hrv * 0.95)))
-                } else {
-                    let hrDiff = 20.0
-                    let baseStress = 15.0 + hrDiff * 1.8
-                    val = max(10.0, min(80.0, baseStress))
-                }
+                let val = calculateStress(m)
+                
                 monthlySums[month, default: 0.0] += val
                 monthlyCounts[month, default: 0.0] += 1.0
                 monthlyDates[month] = m.date
             }
-            let sortedMonths = monthlyDates.keys.sorted { m1, m2 in
-                monthlyDates[m1]! < monthlyDates[m2]!
-            }
+            
+            let sortedMonths = monthlyDates.keys.sorted { monthlyDates[$1]! > monthlyDates[$0]! }
             let pointsYear = sortedMonths.map { month in
                 (monthlySums[month] ?? 0.0) / (monthlyCounts[month] ?? 1.0)
             }
@@ -230,38 +255,84 @@ struct StressHeartRateDetailView: View {
             let averageYear = pointsYear.isEmpty ? 0.0 : pointsYear.reduce(0, +) / Double(pointsYear.count)
             return TimeframeData(points: pointsYear, labels: labelsYear, average: averageYear)
         }
-        
+
         let average = points.isEmpty ? 0.0 : points.reduce(0, +) / Double(points.count)
         return TimeframeData(points: points, labels: labels, average: average)
     }
-    
+
     private func getHRData() -> TimeframeData {
         if selectedTimeframe == .day {
-            let rhrVal = hkManager.todayRHR > 0 ? hkManager.todayRHR : 60.0
-            let avgVal = hkManager.todayAverageHR > 0 ? hkManager.todayAverageHR : 72.0
-            let maxVal = hkManager.todayMaxHR > 0 ? hkManager.todayMaxHR : 130.0
-            
-            // Plot today's heart rate fluctuation (hourly)
-            let points = [rhrVal, rhrVal + 2.0, avgVal - 5.0, avgVal + 15.0, maxVal - 10.0, avgVal + 5.0, rhrVal + 6.0, rhrVal]
+            let startOfSelectedDay = cal.startOfDay(for: selectedDay)
+            let endOfSelectedDay = isViewingToday ? Date() : cal.date(byAdding: .day, value: 1, to: startOfSelectedDay)!
             let labels = ["12am", "3am", "6am", "9am", "12pm", "3pm", "6pm", "9pm"]
-            return TimeframeData(points: points, labels: labels, average: avgVal)
+            let segmentHours = [0, 3, 6, 9, 12, 15, 18, 21]
+
+            let hrSamples = LocalPersistenceManager.shared.fetchSamples(
+                typeIdentifier: "HKQuantityTypeIdentifierHeartRate",
+                from: startOfSelectedDay,
+                to: endOfSelectedDay
+            )
+            guard !hrSamples.isEmpty else { return TimeframeData(points: [], labels: labels, average: 0) }
+
+            var segmentSums = [Double](repeating: 0.0, count: 8)
+            var segmentCounts = [Int](repeating: 0, count: 8)
+            for sample in hrSamples {
+                let hour = cal.component(.hour, from: sample.startDate)
+                var segIdx = 7
+                for (i, h) in segmentHours.enumerated() {
+                    if hour <= h { segIdx = i; break }
+                }
+                segmentSums[segIdx] += sample.value
+                segmentCounts[segIdx] += 1
+            }
+
+            let points = (0..<8).map { i -> Double in
+                segmentCounts[i] > 0 ? segmentSums[i] / Double(segmentCounts[i]) : 0.0
+            }
+            let nonZero = points.filter { $0 > 0 }
+            let average = nonZero.isEmpty ? 0.0 : nonZero.reduce(0, +) / Double(nonZero.count)
+            return TimeframeData(points: points, labels: labels, average: average)
         }
-        
+
         let calendar = Calendar.current
         let fMetrics = filteredMetrics
-        
-        let points = fMetrics.map { $0.rhr > 0 ? $0.rhr : 60.0 }
-        
+
+        let points = fMetrics.map { $0.rhr > 0 ? $0.rhr : 0.0 }
+
         let formatter = DateFormatter()
         let labels: [String]
         switch selectedTimeframe {
         case .day:
             labels = [] // Handled in the guard block above
+        case .threeDays:
+            formatter.dateFormat = "E"
+            labels = fMetrics.map { formatter.string(from: $0.date) }
         case .week:
             formatter.dateFormat = "E"
             labels = fMetrics.map { formatter.string(from: $0.date) }
         case .month:
             labels = ["W1", "W2", "W3", "W4"]
+        case .sixMonths:
+            formatter.dateFormat = "MMM"
+            var monthlySums6M: [Int: Double] = [:]
+            var monthlyCounts6M: [Int: Double] = [:]
+            var monthlyDates6M: [Int: Date] = [:]
+            for m in fMetrics {
+                let month = calendar.component(.month, from: m.date)
+                let val = m.rhr > 0 ? m.rhr : 0.0
+                monthlySums6M[month, default: 0.0] += val
+                monthlyCounts6M[month, default: 0.0] += 1.0
+                monthlyDates6M[month] = m.date
+            }
+            let sortedMonths6M = monthlyDates6M.keys.sorted { monthlyDates6M[$0]! < monthlyDates6M[$1]! }
+            let points6M = sortedMonths6M.map { month in
+                (monthlySums6M[month] ?? 0.0) / (monthlyCounts6M[month] ?? 1.0)
+            }
+            let labels6M = sortedMonths6M.map { month in
+                formatter.string(from: monthlyDates6M[month]!)
+            }
+            let average6M = points6M.isEmpty ? 0.0 : points6M.reduce(0, +) / Double(points6M.count)
+            return TimeframeData(points: points6M, labels: labels6M, average: average6M)
         case .year:
             formatter.dateFormat = "MMM"
             var monthlySums: [Int: Double] = [:]
@@ -269,7 +340,7 @@ struct StressHeartRateDetailView: View {
             var monthlyDates: [Int: Date] = [:]
             for m in fMetrics {
                 let month = calendar.component(.month, from: m.date)
-                let val = m.rhr > 0 ? m.rhr : 60.0
+                let val = m.rhr > 0 ? m.rhr : 0.0
                 monthlySums[month, default: 0.0] += val
                 monthlyCounts[month, default: 0.0] += 1.0
                 monthlyDates[month] = m.date
@@ -286,7 +357,7 @@ struct StressHeartRateDetailView: View {
             let averageYear = pointsYear.isEmpty ? 0.0 : pointsYear.reduce(0, +) / Double(pointsYear.count)
             return TimeframeData(points: pointsYear, labels: labelsYear, average: averageYear)
         }
-        
+
         let average = points.isEmpty ? 0.0 : points.reduce(0, +) / Double(points.count)
         return TimeframeData(points: points, labels: labels, average: average)
     }
@@ -300,6 +371,8 @@ struct StressHeartRateDetailView: View {
                 VStack(spacing: 20) {
                     CustomSegmentedPicker(selection: $selectedTimeframe)
                         .padding(.top, 10)
+
+                    PeriodNavigationView(timeframe: .day, baseDate: $selectedDay, accentColor: Theme.Colors.recoveryMid)
 
                     // Compact Score Card
                     HStack(spacing: 18) {
@@ -502,23 +575,6 @@ struct StressHeartRateDetailView: View {
                         HStack(spacing: 12) {
                             Button(action: {
                                 withAnimation(.easeInOut(duration: 0.2)) {
-                                    selectedGraphTab = 0
-                                }
-                            }) {
-                                Text("Stress Index")
-                                    .font(Theme.Typography.roundedFont(size: 13, weight: .bold))
-                                    .foregroundColor(selectedGraphTab == 0 ? .white : .white.opacity(0.4))
-                                    .padding(.vertical, 6)
-                                    .padding(.horizontal, 12)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 6)
-                                            .fill(selectedGraphTab == 0 ? Color.white.opacity(0.08) : Color.clear)
-                                    )
-                            }
-                            .buttonStyle(PlainButtonStyle())
-                            
-                            Button(action: {
-                                withAnimation(.easeInOut(duration: 0.2)) {
                                     selectedGraphTab = 1
                                 }
                             }) {
@@ -530,6 +586,23 @@ struct StressHeartRateDetailView: View {
                                     .background(
                                         RoundedRectangle(cornerRadius: 6)
                                             .fill(selectedGraphTab == 1 ? Color.white.opacity(0.08) : Color.clear)
+                                    )
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                            
+                            Button(action: {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    selectedGraphTab = 0
+                                }
+                            }) {
+                                Text("Stress Index")
+                                    .font(Theme.Typography.roundedFont(size: 13, weight: .bold))
+                                    .foregroundColor(selectedGraphTab == 0 ? .white : .white.opacity(0.4))
+                                    .padding(.vertical, 6)
+                                    .padding(.horizontal, 12)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 6)
+                                            .fill(selectedGraphTab == 0 ? Color.white.opacity(0.08) : Color.clear)
                                     )
                             }
                             .buttonStyle(PlainButtonStyle())

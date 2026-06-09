@@ -6,8 +6,46 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		DEDD94852FD7ED7A000ADB26 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DEDD94842FD7ED7A000ADB26 /* WidgetKit.framework */; };
+		DEDD94872FD7ED7A000ADB26 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DEDD94862FD7ED7A000ADB26 /* SwiftUI.framework */; };
+		DEDD94942FD7ED7C000ADB26 /* openFitness-widgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = DEDD94822FD7ED7A000ADB26 /* openFitness-widgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		AABB94F02FD8ED7B000ADB26 /* openFitness_widget.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABB94C02FD8ED7B000ADB26 /* openFitness_widget.swift */; };
+		AABB94002FD9ED7B000ADB26 /* openFitness_widgetBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABB94D02FD8ED7B000ADB26 /* openFitness_widgetBundle.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		DEDD94922FD7ED7C000ADB26 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = DEDD937E2FD39286000ADB26 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = DEDD94812FD7ED7A000ADB26;
+			remoteInfo = "openFitness-widgetExtension";
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		DEDD94992FD7ED7C000ADB26 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				DEDD94942FD7ED7C000ADB26 /* openFitness-widgetExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
 		DEDD93862FD39286000ADB26 /* openFitness.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = openFitness.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		DEDD94822FD7ED7A000ADB26 /* openFitness-widgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "openFitness-widgetExtension.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
+		DEDD94842FD7ED7A000ADB26 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		DEDD94862FD7ED7A000ADB26 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
+		AABB94C02FD8ED7B000ADB26 /* openFitness_widget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = openFitness_widget.swift; sourceTree = "<group>"; };
+		AABB94D02FD8ED7B000ADB26 /* openFitness_widgetBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = openFitness_widgetBundle.swift; sourceTree = "<group>"; };
+		AABB94E02FD8ED7B000ADB26 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -26,6 +64,15 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		DEDD947F2FD7ED7A000ADB26 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				DEDD94872FD7ED7A000ADB26 /* SwiftUI.framework in Frameworks */,
+				DEDD94852FD7ED7A000ADB26 /* WidgetKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -33,16 +80,38 @@
 			isa = PBXGroup;
 			children = (
 				DEDD93882FD39286000ADB26 /* openFitness */,
+				AABB94B02FD8ED7B000ADB26 /* openFitness-widget */,
+				DEDD94832FD7ED7A000ADB26 /* Frameworks */,
 				DEDD93872FD39286000ADB26 /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		AABB94B02FD8ED7B000ADB26 /* openFitness-widget */ = {
+			isa = PBXGroup;
+			children = (
+				AABB94E02FD8ED7B000ADB26 /* Info.plist */,
+				AABB94C02FD8ED7B000ADB26 /* openFitness_widget.swift */,
+				AABB94D02FD8ED7B000ADB26 /* openFitness_widgetBundle.swift */,
+			);
+			path = "openFitness-widget";
 			sourceTree = "<group>";
 		};
 		DEDD93872FD39286000ADB26 /* Products */ = {
 			isa = PBXGroup;
 			children = (
 				DEDD93862FD39286000ADB26 /* openFitness.app */,
+				DEDD94822FD7ED7A000ADB26 /* openFitness-widgetExtension.appex */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		DEDD94832FD7ED7A000ADB26 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				DEDD94842FD7ED7A000ADB26 /* WidgetKit.framework */,
+				DEDD94862FD7ED7A000ADB26 /* SwiftUI.framework */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -55,10 +124,12 @@
 				DEDD93822FD39286000ADB26 /* Sources */,
 				DEDD93832FD39286000ADB26 /* Frameworks */,
 				DEDD93842FD39286000ADB26 /* Resources */,
+				DEDD94992FD7ED7C000ADB26 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				DEDD94932FD7ED7C000ADB26 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				DEDD93882FD39286000ADB26 /* openFitness */,
@@ -69,6 +140,25 @@
 			productName = openFitness;
 			productReference = DEDD93862FD39286000ADB26 /* openFitness.app */;
 			productType = "com.apple.product-type.application";
+		};
+		DEDD94812FD7ED7A000ADB26 /* openFitness-widgetExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = DEDD94962FD7ED7C000ADB26 /* Build configuration list for PBXNativeTarget "openFitness-widgetExtension" */;
+			buildPhases = (
+				DEDD947E2FD7ED7A000ADB26 /* Sources */,
+				DEDD947F2FD7ED7A000ADB26 /* Frameworks */,
+				DEDD94802FD7ED7A000ADB26 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "openFitness-widgetExtension";
+			packageProductDependencies = (
+			);
+			productName = "openFitness-widgetExtension";
+			productReference = DEDD94822FD7ED7A000ADB26 /* openFitness-widgetExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -81,6 +171,9 @@
 				LastUpgradeCheck = 2650;
 				TargetAttributes = {
 					DEDD93852FD39286000ADB26 = {
+						CreatedOnToolsVersion = 26.5;
+					};
+					DEDD94812FD7ED7A000ADB26 = {
 						CreatedOnToolsVersion = 26.5;
 					};
 				};
@@ -100,12 +193,20 @@
 			projectRoot = "";
 			targets = (
 				DEDD93852FD39286000ADB26 /* openFitness */,
+				DEDD94812FD7ED7A000ADB26 /* openFitness-widgetExtension */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		DEDD93842FD39286000ADB26 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DEDD94802FD7ED7A000ADB26 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -122,7 +223,24 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		DEDD947E2FD7ED7A000ADB26 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AABB94F02FD8ED7B000ADB26 /* openFitness_widget.swift in Sources */,
+				AABB94002FD9ED7B000ADB26 /* openFitness_widgetBundle.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		DEDD94932FD7ED7C000ADB26 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = DEDD94812FD7ED7A000ADB26 /* openFitness-widgetExtension */;
+			targetProxy = DEDD94922FD7ED7C000ADB26 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		DEDD938F2FD39288000ADB26 /* Debug */ = {
@@ -271,7 +389,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 26.5;
-				MARKETING_VERSION = 0.2.0;
+				MARKETING_VERSION = 0.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.foss-aninda.openFitness";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -318,7 +436,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 26.5;
-				MARKETING_VERSION = 0.2.0;
+				MARKETING_VERSION = 0.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.foss-aninda.openFitness";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -332,6 +450,69 @@
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2,7";
 				XROS_DEPLOYMENT_TARGET = 26.5;
+			};
+			name = Release;
+		};
+		DEDD94972FD7ED7C000ADB26 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = XRK8KK97G3;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "openFitness-widget/Info.plist";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.foss-aninda.openFitness.openFitness-widget";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = iphoneos;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		DEDD94982FD7ED7C000ADB26 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = XRK8KK97G3;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "openFitness-widget/Info.plist";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.foss-aninda.openFitness.openFitness-widget";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = iphoneos;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
 			};
 			name = Release;
 		};
@@ -352,6 +533,15 @@
 			buildConfigurations = (
 				DEDD93922FD39288000ADB26 /* Debug */,
 				DEDD93932FD39288000ADB26 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		DEDD94962FD7ED7C000ADB26 /* Build configuration list for PBXNativeTarget "openFitness-widgetExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				DEDD94972FD7ED7C000ADB26 /* Debug */,
+				DEDD94982FD7ED7C000ADB26 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

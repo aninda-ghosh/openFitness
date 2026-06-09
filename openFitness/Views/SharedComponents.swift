@@ -3,8 +3,10 @@ import SwiftUI
 // MARK: - Timeframe Enum
 enum Timeframe: String, CaseIterable, Identifiable {
     case day = "D"
+    case threeDays = "3D"
     case week = "W"
     case month = "M"
+    case sixMonths = "6M"
     case year = "Y"
     var id: String { self.rawValue }
 }
@@ -51,6 +53,128 @@ struct CustomSegmentedPicker: View {
     }
 }
 
+// MARK: - Period Navigation View
+struct PeriodNavigationView: View {
+    let timeframe: Timeframe
+    @Binding var baseDate: Date
+    var accentColor: Color = Theme.Colors.sleepDeep
+
+    private var isAtPresent: Bool {
+        Calendar.current.isDateInToday(baseDate)
+    }
+
+    private var periodLabel: String {
+        let calendar = Calendar.current
+        let fmt = DateFormatter()
+        switch timeframe {
+        case .day:
+            if calendar.isDateInToday(baseDate) { return "Today" }
+            if calendar.isDateInYesterday(baseDate) { return "Yesterday" }
+            fmt.dateFormat = "MMM d, yyyy"
+            return fmt.string(from: baseDate)
+        case .threeDays:
+            let start = calendar.date(byAdding: .day, value: -2, to: baseDate)!
+            let startFmt = DateFormatter(); startFmt.dateFormat = "MMM d"
+            let endFmt = DateFormatter(); endFmt.dateFormat = "MMM d"
+            return "3D range — \(startFmt.string(from: start)) – \(endFmt.string(from: baseDate))"
+        case .week:
+            let start = calendar.date(byAdding: .day, value: -6, to: baseDate)!
+            let startFmt = DateFormatter(); startFmt.dateFormat = "MMM d"
+            let endFmt = DateFormatter()
+            endFmt.dateFormat = calendar.component(.year, from: start) == calendar.component(.year, from: baseDate) ? "MMM d" : "MMM d, yyyy"
+            let yearFmt = DateFormatter(); yearFmt.dateFormat = "yyyy"
+            return "\(startFmt.string(from: start)) – \(endFmt.string(from: baseDate)), \(yearFmt.string(from: baseDate))"
+        case .month:
+            fmt.dateFormat = "MMMM yyyy"
+            return fmt.string(from: baseDate)
+        case .sixMonths:
+            let start = calendar.date(byAdding: .month, value: -6, to: baseDate)!
+            let startFmt = DateFormatter(); startFmt.dateFormat = "MMM yyyy"
+            let endFmt = DateFormatter(); endFmt.dateFormat = "MMM yyyy"
+            return "\(startFmt.string(from: start)) – \(endFmt.string(from: baseDate))"
+        case .year:
+            let start = calendar.date(byAdding: .day, value: -364, to: baseDate)!
+            let startFmt = DateFormatter(); startFmt.dateFormat = "MMM yyyy"
+            let endFmt = DateFormatter(); endFmt.dateFormat = "MMM yyyy"
+            return "\(startFmt.string(from: start)) – \(endFmt.string(from: baseDate))"
+        }
+    }
+
+    private func stepBack() {
+        let calendar = Calendar.current
+        switch timeframe {
+        case .day:
+            baseDate = calendar.date(byAdding: .day, value: -1, to: baseDate) ?? baseDate
+        case .threeDays:
+            baseDate = calendar.date(byAdding: .day, value: -3, to: baseDate) ?? baseDate
+        case .week:
+            baseDate = calendar.date(byAdding: .day, value: -7, to: baseDate) ?? baseDate
+        case .month:
+            baseDate = calendar.date(byAdding: .month, value: -1, to: baseDate) ?? baseDate
+        case .sixMonths:
+            baseDate = calendar.date(byAdding: .month, value: -6, to: baseDate) ?? baseDate
+        case .year:
+            baseDate = calendar.date(byAdding: .year, value: -1, to: baseDate) ?? baseDate
+        }
+    }
+
+    private func stepForward() {
+        guard !isAtPresent else { return }
+        let calendar = Calendar.current
+        let candidate: Date
+        switch timeframe {
+        case .day:
+            candidate = calendar.date(byAdding: .day, value: 1, to: baseDate) ?? baseDate
+        case .threeDays:
+            candidate = calendar.date(byAdding: .day, value: 3, to: baseDate) ?? baseDate
+        case .week:
+            candidate = calendar.date(byAdding: .day, value: 7, to: baseDate) ?? baseDate
+        case .month:
+            candidate = calendar.date(byAdding: .month, value: 1, to: baseDate) ?? baseDate
+        case .sixMonths:
+            candidate = calendar.date(byAdding: .month, value: 6, to: baseDate) ?? baseDate
+        case .year:
+            candidate = calendar.date(byAdding: .year, value: 1, to: baseDate) ?? baseDate
+        }
+        baseDate = candidate > Date() ? calendar.startOfDay(for: Date()) : candidate
+    }
+
+    var body: some View {
+        HStack(spacing: 0) {
+            Button(action: stepBack) {
+                Image(systemName: "chevron.left")
+                    .font(Theme.Typography.label)
+                    .foregroundColor(accentColor)
+                    .frame(width: 32, height: 32)
+                    .background(accentColor.opacity(0.12))
+                    .clipShape(Circle())
+            }
+            .buttonStyle(PlainButtonStyle())
+
+            Spacer()
+
+            Text(periodLabel)
+                .font(Theme.Typography.roundedFont(size: 13, weight: .bold))
+                .foregroundColor(.white.opacity(0.85))
+                .lineLimit(1)
+
+            Spacer()
+
+            Button(action: stepForward) {
+                Image(systemName: "chevron.right")
+                    .font(Theme.Typography.label)
+                    .foregroundColor(isAtPresent ? .white.opacity(0.15) : accentColor)
+                    .frame(width: 32, height: 32)
+                    .background(isAtPresent ? Color.clear : accentColor.opacity(0.12))
+                    .clipShape(Circle())
+            }
+            .buttonStyle(PlainButtonStyle())
+            .disabled(isAtPresent)
+        }
+        .padding(.horizontal)
+    }
+}
+
 // MARK: - ECG Waveform Viewer Sheet
 struct ECGDetailSheet: View {
     @Environment(\.presentationMode) var presentationMode
@@ -85,7 +209,7 @@ struct ECGDetailSheet: View {
                         presentationMode.wrappedValue.dismiss()
                     }) {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 22))
+                            .font(Theme.Typography.roundedFont(size: 22, weight: .regular))
                             .foregroundColor(.white.opacity(0.6))
                     }
                 }
@@ -445,7 +569,7 @@ struct CustomLineGraph: View {
                             
                             // Max value label
                             Text(maxVal_pt >= 10 ? String(format: "%.0f", maxVal_pt) : String(format: "%.1f", maxVal_pt))
-                                .font(Theme.Typography.roundedFont(size: 8, weight: .bold))
+                                .font(Theme.Typography.tick)
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 4)
                                 .padding(.vertical, 2)
@@ -469,7 +593,7 @@ struct CustomLineGraph: View {
                             
                             // Min value label
                             Text(minVal_pt >= 10 ? String(format: "%.0f", minVal_pt) : String(format: "%.1f", minVal_pt))
-                                .font(Theme.Typography.roundedFont(size: 8, weight: .bold))
+                                .font(Theme.Typography.tick)
                                 .foregroundColor(.white.opacity(0.85))
                                 .padding(.horizontal, 4)
                                 .padding(.vertical, 2)
@@ -494,8 +618,8 @@ struct CustomLineGraph: View {
                     let labelText = labels[index]
                     if !labelText.isEmpty {
                         Text(labelText)
-                            .font(Theme.Typography.roundedFont(size: 9, weight: .bold))
-                            .foregroundColor(.white.opacity(0.45))
+                            .font(Theme.Typography.tick)
+                            .foregroundColor(.white.opacity(0.5))
                             .lineLimit(1)
                             .fixedSize(horizontal: true, vertical: false)
                             .frame(maxWidth: .infinity)
@@ -628,7 +752,7 @@ struct SleepStageCard: View {
             HStack {
                 HStack(spacing: 4) {
                     Image(systemName: icon)
-                        .font(.system(size: 12))
+                        .font(Theme.Typography.labelSM)
                         .foregroundColor(color)
                     
                     Text(stageName)
@@ -735,22 +859,22 @@ struct SleepHypnogramChart: View {
                         .stroke(Color.white.opacity(0.05), style: StrokeStyle(lineWidth: 1, dash: [2]))
                         
                         Text("Awake")
-                            .font(Theme.Typography.roundedFont(size: 8, weight: .bold))
+                            .font(Theme.Typography.tick)
                             .foregroundColor(Theme.Colors.sleepAwake)
                             .offset(x: 4, y: yForStage(0) - 6)
-                        
+
                         Text("REM")
-                            .font(Theme.Typography.roundedFont(size: 8, weight: .bold))
+                            .font(Theme.Typography.tick)
                             .foregroundColor(Theme.Colors.sleepREM)
                             .offset(x: 4, y: yForStage(2) - 6)
-                        
+
                         Text("Light")
-                            .font(Theme.Typography.roundedFont(size: 8, weight: .bold))
+                            .font(Theme.Typography.tick)
                             .foregroundColor(Theme.Colors.sleepLight)
                             .offset(x: 4, y: yForStage(1) - 6)
-                        
+
                         Text("Deep")
-                            .font(Theme.Typography.roundedFont(size: 8, weight: .bold))
+                            .font(Theme.Typography.tick)
                             .foregroundColor(Theme.Colors.sleepDeep)
                             .offset(x: 4, y: yForStage(3) - 6)
                         

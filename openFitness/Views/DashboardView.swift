@@ -1,5 +1,11 @@
 import SwiftUI
 
+private func formatStaleDate(_ date: Date) -> String {
+    let formatter = DateFormatter()
+    formatter.dateFormat = "MMM d"
+    return formatter.string(from: date)
+}
+
 struct DashboardView: View {
     @StateObject private var hkManager = HealthKitManager()
     @State private var selectedECG: ECGPoint?
@@ -120,7 +126,7 @@ struct DashboardView: View {
                             // FAQ button
                             Button(action: { showingFAQ = true }) {
                                 Image(systemName: "questionmark.circle")
-                                    .font(.system(size: 20, weight: .medium))
+                                    .font(Theme.Typography.titleSM)
                                     .foregroundColor(.white.opacity(0.45))
                             }
                             .buttonStyle(PlainButtonStyle())
@@ -254,7 +260,8 @@ struct DashboardView: View {
                                         title: "Sleep",
                                         value: "\(hkManager.todaySleepScore)",
                                         progress: Double(hkManager.todaySleepScore) / 100.0,
-                                        color: Theme.Colors.sleepDeep
+                                        color: Theme.Colors.sleepDeep,
+                                        subtitle: hkManager.isSleepDataStale ? formatStaleDate(hkManager.sleepDataDate) : nil
                                     )
                                 }
                                 .buttonStyle(TactileButtonStyle())
@@ -312,7 +319,7 @@ struct DashboardView: View {
                                         .frame(height: 6)
                                         
                                         Text("Goal: 10,000")
-                                            .font(Theme.Typography.roundedFont(size: 9, weight: .semibold))
+                                            .font(Theme.Typography.tick)
                                             .foregroundColor(.white.opacity(0.3))
                                     }
                                 }
@@ -350,7 +357,7 @@ struct DashboardView: View {
                                         .frame(height: 6)
                                         
                                         Text("Goal: 600 kcal")
-                                            .font(Theme.Typography.roundedFont(size: 9, weight: .semibold))
+                                            .font(Theme.Typography.tick)
                                             .foregroundColor(.white.opacity(0.3))
                                     }
                                 }
@@ -531,7 +538,10 @@ struct DashboardView: View {
                             temp: hkManager.todayBodyTemperature,
                             sleepHours: hkManager.todaySleepHours
                         )
-                        
+
+                        // Body Composition & Fitness
+                        BodyCompositionView(hkManager: hkManager)
+
                         // Weekly Workout Patterns Card
                         WorkoutPatternCard(workouts: hkManager.recentWorkouts, hkManager: hkManager)
                         
@@ -792,7 +802,7 @@ struct VitalsMonitorView: View {
                         title: "Sleep Duration",
                         shortTitle: "Sleep",
                         value: sleepHours > 0 ? formatSleepHours(sleepHours) : "--",
-                        status: sleepHours == 0 ? "No Data" : (sleepHours < 6.5 ? "Short" : "Normal"),
+                        status: hkManager.isSleepDataStale ? formatStaleDate(hkManager.sleepDataDate) : (sleepHours == 0 ? "No Data" : (sleepHours < 6.5 ? "Short" : "Normal")),
                         color: sleepHours == 0 ? .gray : (sleepHours < 6.5 ? Theme.Colors.recoveryMid : Theme.Colors.recoveryHigh),
                         ratio: sleepHours == 0 ? 0.5 : min(1.0, max(0.0, (sleepHours - 4.0) / 6.0)),
                         iconName: "bed.double.fill"
@@ -816,6 +826,84 @@ struct VitalsMonitorView: View {
     }
 }
 
+// MARK: - Body Composition & Fitness Section
+struct BodyCompositionView: View {
+    @ObservedObject var hkManager: HealthKitManager
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Text("BODY COMPOSITION & FITNESS")
+                    .font(Theme.Typography.cardTitle)
+                    .foregroundColor(.white.opacity(0.6))
+                Spacer()
+                Image(systemName: "figure.arms.open")
+                    .foregroundColor(Theme.Colors.strainHigh)
+            }
+
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
+                NavigationLink(destination: VitalsDetailView(hkManager: hkManager, type: .bodyFatPercentage)) {
+                    let fat = hkManager.todayBodyFatPercentage
+                    VitalTileView(
+                        title: "Body Fat",
+                        shortTitle: "Fat%",
+                        value: fat > 0 ? String(format: "%.1f%%", fat) : "--%",
+                        status: fat == 0 ? "No Data" : (fat > 32 ? "High" : (fat > 20 ? "Average" : "Fit")),
+                        color: fat == 0 ? .gray : (fat > 32 ? Theme.Colors.recoveryLow : (fat > 20 ? Color.orange : Theme.Colors.recoveryHigh)),
+                        ratio: fat == 0 ? 0.5 : min(1.0, max(0.0, 1.0 - (fat - 5.0) / 35.0)),
+                        iconName: "figure.arms.open"
+                    )
+                }
+                .buttonStyle(PlainButtonStyle())
+
+                NavigationLink(destination: VitalsDetailView(hkManager: hkManager, type: .vo2Max)) {
+                    let vo2 = hkManager.todayVO2Max
+                    VitalTileView(
+                        title: "VO2 Max",
+                        shortTitle: "VO2",
+                        value: vo2 > 0 ? String(format: "%.1f", vo2) : "--",
+                        status: vo2 == 0 ? "No Data" : (vo2 >= 52 ? "Excellent" : (vo2 >= 42 ? "Good" : (vo2 >= 34 ? "Fair" : "Low"))),
+                        color: vo2 == 0 ? .gray : (vo2 >= 42 ? Theme.Colors.recoveryHigh : (vo2 >= 34 ? Color.orange : Theme.Colors.recoveryLow)),
+                        ratio: vo2 == 0 ? 0.5 : min(1.0, max(0.0, (vo2 - 20.0) / 50.0)),
+                        iconName: "lungs.fill"
+                    )
+                }
+                .buttonStyle(PlainButtonStyle())
+
+                NavigationLink(destination: VitalsDetailView(hkManager: hkManager, type: .bmi)) {
+                    let bmi = hkManager.todayBMI
+                    VitalTileView(
+                        title: "BMI",
+                        shortTitle: "BMI",
+                        value: bmi > 0 ? String(format: "%.1f", bmi) : "--",
+                        status: bmi == 0 ? "No Data" : (bmi >= 30 ? "Obese" : (bmi >= 25 ? "Overweight" : (bmi >= 18.5 ? "Normal" : "Underweight"))),
+                        color: bmi == 0 ? .gray : (bmi >= 18.5 && bmi < 25 ? Theme.Colors.recoveryHigh : (bmi < 30 ? Color.orange : Theme.Colors.recoveryLow)),
+                        ratio: bmi == 0 ? 0.5 : min(1.0, max(0.0, (bmi - 15.0) / 25.0)),
+                        iconName: "scalemass.fill"
+                    )
+                }
+                .buttonStyle(PlainButtonStyle())
+
+                NavigationLink(destination: VitalsDetailView(hkManager: hkManager, type: .weight)) {
+                    let wt = hkManager.todayWeight
+                    VitalTileView(
+                        title: "Weight",
+                        shortTitle: "kg",
+                        value: wt > 0 ? String(format: "%.1f kg", wt) : "-- kg",
+                        status: wt == 0 ? "No Data" : "Tracked",
+                        color: wt == 0 ? .gray : Theme.Colors.recoveryHigh,
+                        ratio: wt == 0 ? 0.5 : min(1.0, max(0.0, (wt - 40.0) / 80.0)),
+                        iconName: "scalemass"
+                    )
+                }
+                .buttonStyle(PlainButtonStyle())
+            }
+        }
+        .glassCard()
+        .padding(.horizontal)
+    }
+}
+
 struct VitalTileView: View {
     let title: String
     let shortTitle: String
@@ -830,7 +918,7 @@ struct VitalTileView: View {
             HStack {
                 HStack(spacing: 6) {
                     Image(systemName: iconName)
-                        .font(.system(size: 12))
+                        .font(Theme.Typography.labelSM)
                         .foregroundColor(color)
                     
                     Text(shortTitle)
@@ -889,6 +977,7 @@ struct CircularGaugeView: View {
     let value: String
     let progress: Double
     let color: Color
+    var subtitle: String? = nil
     
     var body: some View {
         VStack(spacing: 8) {
@@ -921,9 +1010,17 @@ struct CircularGaugeView: View {
                     .foregroundColor(.white)
             }
             
-            Text(title.uppercased())
-                .font(Theme.Typography.roundedFont(size: 10, weight: .bold))
-                .foregroundColor(.white.opacity(0.5))
+            VStack(spacing: 2) {
+                Text(title.uppercased())
+                    .font(Theme.Typography.roundedFont(size: 10, weight: .bold))
+                    .foregroundColor(.white.opacity(0.5))
+                
+                if let subtitle = subtitle {
+                    Text(subtitle)
+                        .font(Theme.Typography.tick)
+                        .foregroundColor(.white.opacity(0.35))
+                }
+            }
         }
         .frame(maxWidth: .infinity)
     }
@@ -959,6 +1056,13 @@ struct ActivenessScoreCard: View {
         return ("Recovery Needed", Theme.Colors.recoveryLow)
     }
     
+    private var sleepPillLabel: String {
+        guard hkManager.isSleepDataStale else { return "Sleep" }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "M/d"
+        return "Sleep (\(formatter.string(from: hkManager.sleepDataDate)))"
+    }
+
     // Sub-scores for the pill breakdown (normalized 0–100)
     private var subScores: [(label: String, icon: String, value: Int, color: Color)] {
         let sRecovery = recovery
@@ -966,11 +1070,11 @@ struct ActivenessScoreCard: View {
         let sSleep = sleepScore
         let sActivity = Int(round((0.6 * min(1.0, Double(steps) / 10000.0) + 0.4 * min(1.0, activeCalories / 600.0)) * 100.0))
         let sStress = max(0, 100 - stressAverage)
-        
+
         return [
             ("Recovery", "heart.fill", sRecovery, Theme.Colors.recoveryHigh),
             ("Strain", "flame.fill", sStrain, Theme.Colors.strainHigh),
-            ("Sleep", "moon.fill", sSleep, Theme.Colors.sleepDeep),
+            (sleepPillLabel, "moon.fill", sSleep, Theme.Colors.sleepDeep),
             ("Activity", "figure.run", sActivity, Theme.Colors.recoveryHigh),
             ("Stress", "brain.head.profile", sStress, Theme.Colors.sleepDeep)
         ]
@@ -998,7 +1102,11 @@ struct ActivenessScoreCard: View {
                 avgHR: hkManager.todayAverageHR,
                 workouts: hkManager.recentWorkouts
             )
-        case "Sleep":
+        case "Activity":
+            ActivityDetailView(hkManager: hkManager, initialTab: 0)
+        case "Stress":
+            StressHeartRateDetailView(hkManager: hkManager)
+        default: // Sleep or Sleep (M/d) when stale
             SleepDetailView(
                 hkManager: hkManager,
                 score: hkManager.todaySleepScore,
@@ -1007,25 +1115,80 @@ struct ActivenessScoreCard: View {
                 deep: hkManager.todayDeepMinutes,
                 rem: hkManager.todayRemMinutes
             )
-        case "Activity":
-            ActivityDetailView(hkManager: hkManager, initialTab: 0)
-        default: // Stress
-            StressHeartRateDetailView(hkManager: hkManager)
         }
     }
 
     var body: some View {
-        VStack(spacing: 12) {
-            // Upper Section: gauge on left, description on right
-            HStack(alignment: .center, spacing: 14) {
-                // Arc Gauge on the left
+        VStack(spacing: 0) {
+            // ── Row 1: title + badge + info ──────────────────────────────────
+            HStack(spacing: 6) {
+                Text("ACTIVENESS SCORE")
+                    .font(Theme.Typography.cardTitle)
+                    .foregroundColor(.white.opacity(0.55))
+                    .fixedSize()
+
+                Button(action: { showingInfo = true }) {
+                    Image(systemName: "info.circle")
+                        .font(.system(size: 12))
+                        .foregroundColor(.white.opacity(0.3))
+                }
+                .buttonStyle(PlainButtonStyle())
+
+                Spacer()
+
+                if PhysiologicalCalculators.isRecalibrating {
+                    HStack(spacing: 3) {
+                        Circle().fill(Color.orange).frame(width: 4, height: 4)
+                        Text("RECALIBRATING \(PhysiologicalCalculators.recalibrationDaysRemaining)D")
+                            .font(Theme.Typography.tick)
+                            .foregroundColor(Color.orange.opacity(0.9))
+                    }
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(Color.orange.opacity(0.12))
+                    .cornerRadius(6)
+                } else {
+                    HStack(spacing: 3) {
+                        Circle().fill(Theme.Colors.recoveryHigh).frame(width: 4, height: 4)
+                        Text("CALIBRATED")
+                            .font(Theme.Typography.tick)
+                            .foregroundColor(Theme.Colors.recoveryHigh.opacity(0.85))
+                    }
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(Theme.Colors.recoveryHigh.opacity(0.1))
+                    .cornerRadius(6)
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.top, 14)
+            .padding(.bottom, 12)
+
+            // ── Row 2: score hero ─────────────────────────────────────────────
+            HStack(alignment: .center, spacing: 16) {
+                // Large score + label on the left
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("\(score)")
+                        .font(Theme.Typography.metricLabel(size: 52))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                    Text(classification.label.uppercased())
+                        .font(Theme.Typography.roundedFont(size: 11, weight: .bold))
+                        .foregroundColor(classification.color)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(classification.color.opacity(0.12))
+                        .cornerRadius(6)
+                }
+
+                Spacer()
+
+                // Arc gauge on the right — decorative accent
                 ZStack {
-                    // Background arc track
                     ArcShape(startAngle: -210, endAngle: 30, lineWidth: 8)
                         .stroke(Color.white.opacity(0.06), style: StrokeStyle(lineWidth: 8, lineCap: .round))
-                        .frame(width: 90, height: 90)
-                    
-                    // Colored progress arc with gradient
+                        .frame(width: 84, height: 84)
+
                     ArcShape(startAngle: -210, endAngle: -210 + (240 * Double(min(score, 100)) / 100.0), lineWidth: 8)
                         .stroke(
                             AngularGradient(
@@ -1036,87 +1199,81 @@ struct ActivenessScoreCard: View {
                             ),
                             style: StrokeStyle(lineWidth: 8, lineCap: .round)
                         )
-                        .frame(width: 90, height: 90)
-                        .shadow(color: classification.color.opacity(0.4), radius: 4, x: 0, y: 1)
-                    
-                    // Score value in center
-                    VStack(spacing: 0) {
-                        Text("\(score)")
-                            .font(Theme.Typography.metricLabel(size: 28))
-                            .foregroundColor(.white)
-                        
-                        Text(classification.label)
-                            .font(Theme.Typography.roundedFont(size: 8, weight: .bold))
-                            .foregroundColor(classification.color)
-                    }
+                        .frame(width: 84, height: 84)
+                        .shadow(color: classification.color.opacity(0.4), radius: 5)
+
+                    Image(systemName: "bolt.fill")
+                        .font(.system(size: 22, weight: .bold))
+                        .foregroundColor(classification.color)
                 }
-                .frame(width: 90, height: 85)
-                
-                // Details on the right
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(alignment: .center) {
-                        Text("ACTIVENESS SCORE")
-                            .font(Theme.Typography.cardTitle)
-                            .foregroundColor(.white.opacity(0.6))
-                        Button(action: { showingInfo = true }) {
-                            Image(systemName: "info.circle")
-                                .font(.system(size: 13, weight: .medium))
-                                .foregroundColor(.white.opacity(0.35))
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                        
-                        Spacer()
-                        
-                        HStack(spacing: 3) {
-                            Circle()
-                                .fill(Theme.Colors.recoveryHigh)
-                                .frame(width: 4, height: 4)
-                            Text("CALIBRATED")
-                                .font(Theme.Typography.roundedFont(size: 8, weight: .bold))
-                                .foregroundColor(Theme.Colors.recoveryHigh.opacity(0.8))
-                        }
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Theme.Colors.recoveryHigh.opacity(0.1))
-                        .cornerRadius(6)
-                    }
-                    
-                    Text(scoreDescription)
-                        .font(Theme.Typography.roundedFont(size: 11, weight: .regular))
-                        .foregroundColor(.white.opacity(0.55))
-                        .lineLimit(3)
-                        .multilineTextAlignment(.leading)
-                }
+                .frame(width: 84, height: 84)
             }
-            .padding(.top, 4)
-            
-            // Sub-score breakdown pills (with navigation links)
-            HStack(spacing: 6) {
+            .padding(.horizontal, 14)
+
+            // Description
+            Text(scoreDescription)
+                .font(Theme.Typography.roundedFont(size: 12, weight: .regular))
+                .foregroundColor(.white.opacity(0.45))
+                .lineLimit(2)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 14)
+                .padding(.top, 8)
+                .padding(.bottom, 14)
+
+            Divider().background(Color.white.opacity(0.06)).padding(.horizontal, 14)
+
+            // ── Row 3: sub-score pills ────────────────────────────────────────
+            HStack(spacing: 5) {
                 ForEach(subScores, id: \.label) { sub in
                     NavigationLink(destination: destinationView(for: sub.label)) {
-                        VStack(spacing: 2) {
+                        VStack(spacing: 3) {
                             Image(systemName: sub.icon)
-                                .font(.system(size: 10))
+                                .font(.system(size: 11))
                                 .foregroundColor(sub.color)
-                            
                             Text("\(sub.value)%")
-                                .font(Theme.Typography.roundedFont(size: 11, weight: .bold))
+                                .font(Theme.Typography.caption)
                                 .foregroundColor(.white)
-                            
                             Text(sub.label)
-                                .font(Theme.Typography.roundedFont(size: 8, weight: .semibold))
-                                .foregroundColor(.white.opacity(0.4))
+                                .font(Theme.Typography.tick)
+                                .foregroundColor(.white.opacity(0.45))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.7)
                         }
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 6)
+                        .padding(.vertical, 8)
                         .background(Color.white.opacity(0.04))
                         .cornerRadius(8)
                     }
                     .buttonStyle(PlainButtonStyle())
                 }
             }
+            .padding(.horizontal, 14)
+            .padding(.top, 12)
+
+            // ── Row 4: History & Trends ───────────────────────────────────────
+            NavigationLink(destination: ActivenessDetailView(hkManager: hkManager)) {
+                HStack(spacing: 8) {
+                    Image(systemName: "chart.line.uptrend.xyaxis")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(Theme.Colors.recoveryHigh)
+                    Text("History & Trends")
+                        .font(Theme.Typography.roundedFont(size: 13, weight: .semibold))
+                        .foregroundColor(Theme.Colors.recoveryHigh)
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.white.opacity(0.25))
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .background(Theme.Colors.recoveryHigh.opacity(0.07))
+                .cornerRadius(9)
+            }
+            .buttonStyle(PlainButtonStyle())
+            .padding(.horizontal, 14)
+            .padding(.top, 10)
+            .padding(.bottom, 14)
         }
-        .padding(12)
         .glassCard()
         .sheet(isPresented: $showingInfo) {
             ActivenessScoreInfoSheet()
@@ -1185,7 +1342,7 @@ struct ActivenessScoreInfoSheet: View {
                         Spacer()
                         Button(action: { presentationMode.wrappedValue.dismiss() }) {
                             Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 22))
+                                .font(Theme.Typography.roundedFont(size: 22, weight: .regular))
                                 .foregroundColor(.white.opacity(0.35))
                         }
                     }
@@ -1214,7 +1371,7 @@ struct ActivenessScoreInfoSheet: View {
                                         .foregroundColor(z.color)
                                         .multilineTextAlignment(.center)
                                     Text(z.range)
-                                        .font(Theme.Typography.roundedFont(size: 9, weight: .regular))
+                                        .font(Theme.Typography.tick)
                                         .foregroundColor(.white.opacity(0.35))
                                 }
                                 .frame(maxWidth: .infinity)
@@ -1240,7 +1397,7 @@ struct ActivenessScoreInfoSheet: View {
                                         .frame(width: max(0, geo.size.width * CGFloat(c.weight) - 2), height: 28)
                                         .overlay(
                                             Text(c.weightLabel)
-                                                .font(Theme.Typography.roundedFont(size: 9, weight: .bold))
+                                                .font(Theme.Typography.tick)
                                                 .foregroundColor(.black.opacity(0.6))
                                         )
                                 }
@@ -1283,7 +1440,7 @@ struct ActivenessScoreInfoSheet: View {
                                             .fill(c.color.opacity(0.12))
                                             .frame(width: 34, height: 34)
                                         Image(systemName: c.icon)
-                                            .font(.system(size: 14, weight: .semibold))
+                                            .font(Theme.Typography.roundedFont(size: 14, weight: .semibold))
                                             .foregroundColor(c.color)
                                     }
 
@@ -1331,7 +1488,7 @@ struct ActivenessScoreInfoSheet: View {
                     // ── Calibration note ─────────────────────────────────
                     HStack(spacing: 12) {
                         Image(systemName: "calendar.badge.clock")
-                            .font(.system(size: 20))
+                            .font(Theme.Typography.titleSM)
                             .foregroundColor(Theme.Colors.recoveryHigh)
                         VStack(alignment: .leading, spacing: 3) {
                             Text("21-day calibration required")
@@ -1451,8 +1608,8 @@ struct WorkoutPatternCard: View {
                     if totalMins > 0 {
                         VStack(alignment: .leading, spacing: 6) {
                             Text("INTENSITY DISTRIBUTION")
-                                .font(Theme.Typography.roundedFont(size: 9, weight: .bold))
-                                .foregroundColor(.white.opacity(0.4))
+                                .font(Theme.Typography.tick)
+                                .foregroundColor(.white.opacity(0.45))
                             
                             GeometryReader { geo in
                                 HStack(spacing: 0) {
@@ -1512,8 +1669,8 @@ struct WorkoutMiniStat: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(title)
-                .font(Theme.Typography.roundedFont(size: 8, weight: .bold))
-                .foregroundColor(.white.opacity(0.4))
+                .font(Theme.Typography.tick)
+                .foregroundColor(.white.opacity(0.45))
             Text(value)
                 .font(Theme.Typography.roundedFont(size: 14, weight: .bold))
                 .foregroundColor(color)
@@ -1539,7 +1696,7 @@ struct WorkoutIntensityLegend: View {
                 .fill(color)
                 .frame(width: 6, height: 6)
             Text(name)
-                .font(Theme.Typography.roundedFont(size: 9, weight: .semibold))
+                .font(Theme.Typography.tick)
                 .foregroundColor(.white.opacity(0.5))
         }
     }

@@ -7,11 +7,18 @@ struct SleepDetailView: View {
     let needed: Double
     let deep: Double
     let rem: Double
-    
+
     @State private var selectedTimeframe: Timeframe = .day
     @State private var selectedGraphTab: Int
     @State private var showAlgorithmDetails = false
-    
+
+    // Period navigation: end date of the currently viewed range
+    @State private var baseDate: Date = Calendar.current.startOfDay(for: Date())
+
+    // Day-level navigation (used when selectedTimeframe == .day)
+    @State private var selectedDayDate: Date = Calendar.current.startOfDay(for: Date())
+    @State private var historicalDaySleepStages: [SleepStageSample] = []
+
     init(hkManager: HealthKitManager, score: Int, duration: Double, needed: Double, deep: Double, rem: Double, initialTab: Int = 0) {
         self.hkManager = hkManager
         self.score = score
@@ -21,191 +28,217 @@ struct SleepDetailView: View {
         self.rem = rem
         self._selectedGraphTab = State(initialValue: initialTab)
     }
-    
-    private var historicalMetrics: [DailyMetrics] {
-        hkManager.historicalMetrics
+
+    private var calendar: Calendar { Calendar.current }
+    private var isViewingToday: Bool { calendar.isDateInToday(selectedDayDate) }
+
+    // MARK: - Day-view resolved values (today or historical)
+    private var displayedScore: Int {
+        if selectedTimeframe == .day && !isViewingToday {
+            return historicalMetrics.first(where: { calendar.isDate($0.date, inSameDayAs: selectedDayDate) })?.sleepScore ?? 0
+        }
+        return score
     }
-    
+    private var displayedDuration: Double {
+        if selectedTimeframe == .day && !isViewingToday {
+            return historicalMetrics.first(where: { calendar.isDate($0.date, inSameDayAs: selectedDayDate) })?.sleepDuration ?? 0
+        }
+        return duration
+    }
+    private var displayedDeep: Double {
+        if selectedTimeframe == .day && !isViewingToday {
+            return historicalMetrics.first(where: { calendar.isDate($0.date, inSameDayAs: selectedDayDate) })?.deepMinutes ?? 0
+        }
+        return deep
+    }
+    private var displayedRem: Double {
+        if selectedTimeframe == .day && !isViewingToday {
+            return historicalMetrics.first(where: { calendar.isDate($0.date, inSameDayAs: selectedDayDate) })?.remMinutes ?? 0
+        }
+        return rem
+    }
+    private var displayedSleepStages: [SleepStageSample] {
+        if selectedTimeframe == .day && !isViewingToday {
+            return historicalDaySleepStages
+        }
+        return hkManager.todaySleepStages
+    }
+    private var isStaleLabelActive: Bool {
+        isViewingToday && hkManager.isSleepDataStale
+    }
+
+    // MARK: - Historical data
+    private var historicalMetrics: [DailyMetrics] { hkManager.historicalMetrics }
+
     private var filteredMetrics: [DailyMetrics] {
-        var metrics: [DailyMetrics]
         switch selectedTimeframe {
         case .day:
             return []
+        case .threeDays:
+            let start = calendar.date(byAdding: .day, value: -2, to: baseDate)!
+            return historicalMetrics.filter { $0.date >= start && $0.date <= baseDate }
         case .week:
-            metrics = Array(historicalMetrics.suffix(7))
+            let start = calendar.date(byAdding: .day, value: -6, to: baseDate)!
+            return historicalMetrics.filter { $0.date >= start && $0.date <= baseDate }
         case .month:
-            metrics = Array(historicalMetrics.suffix(30))
+            let start = calendar.date(byAdding: .day, value: -29, to: baseDate)!
+            return historicalMetrics.filter { $0.date >= start && $0.date <= baseDate }
+        case .sixMonths:
+            let start = calendar.date(byAdding: .day, value: -179, to: baseDate)!
+            return historicalMetrics.filter { $0.date >= start && $0.date <= baseDate }
         case .year:
-            metrics = historicalMetrics
+            let start = calendar.date(byAdding: .day, value: -364, to: baseDate)!
+            return historicalMetrics.filter { $0.date >= start && $0.date <= baseDate }
         }
-        
-        let calendar = Calendar.current
-        let todayStart = calendar.startOfDay(for: Date())
-        if !metrics.contains(where: { calendar.isDate($0.date, inSameDayAs: todayStart) }) {
-            let todayMetric = DailyMetrics(
-                date: todayStart,
-                recoveryScore: hkManager.todayRecovery,
-                strainScore: hkManager.todayStrain,
-                sleepScore: score,
-                hrv: hkManager.todayHRV,
-                rhr: hkManager.todayRHR,
-                sleepDuration: duration,
-                sleepNeeded: needed,
-                deepMinutes: deep,
-                remMinutes: rem,
-                activeCalories: hkManager.todayActiveCalories,
-                averageHR: hkManager.todayAverageHR > 0 ? hkManager.todayAverageHR : (hkManager.todayRHR > 0 ? hkManager.todayRHR + 20.0 : 80.0),
-                maxHR: hkManager.todayMaxHR > 0 ? hkManager.todayMaxHR : (hkManager.todayRHR > 0 ? hkManager.todayRHR + 65.0 : 140.0),
-                steps: hkManager.todaySteps,
-                respiratoryRate: hkManager.todayRespiratoryRate,
-                oxygenSaturation: hkManager.todayOxygenSaturation,
-                bodyTemperature: hkManager.todayBodyTemperature
-            )
-            metrics.append(todayMetric)
-        }
-        return metrics
     }
-    
+
     private var displayScore: Int {
-        if selectedTimeframe == .day {
-            return score
-        }
-        let metrics = filteredMetrics
-        let scores = metrics.map { $0.sleepScore }.filter { $0 > 0 }
-        if scores.isEmpty {
-            return score
-        }
-        return Int(scores.reduce(0, +) / scores.count)
+        if selectedTimeframe == .day { return displayedScore }
+        let scores = filteredMetrics.map { $0.sleepScore }.filter { $0 > 0 }
+        return scores.isEmpty ? displayedScore : Int(scores.reduce(0, +) / scores.count)
     }
-    
+
     private var displayDuration: Double {
-        if selectedTimeframe == .day {
-            return duration
-        }
-        let metrics = filteredMetrics
-        let durations = metrics.map { $0.sleepDuration }.filter { $0 > 0.0 }
-        if durations.isEmpty {
-            return duration
-        }
-        return durations.reduce(0.0, +) / Double(durations.count)
+        if selectedTimeframe == .day { return displayedDuration }
+        let durations = filteredMetrics.map { $0.sleepDuration }.filter { $0 > 0 }
+        return durations.isEmpty ? displayedDuration : durations.reduce(0, +) / Double(durations.count)
     }
-    
-    // Predictive Sleep Need tonight based on today's Strain & current Sleep Debt (Today specific)
+
+    // MARK: - Tonight's sleep need (always based on today)
     private var predictedSleepNeeded: (totalHours: Double, strainAdditionMins: Int, debtAdditionMins: Int) {
         let baseNeeded = needed > 0 ? needed : 8.0
-        
-        // Strain-based extension: 3.5 minutes per Strain point today
         let strainExtensionMins = Int(hkManager.todayStrain * 3.5)
-        
-        // Sleep Debt contribution: last 7 days debt (including today)
+
         var last7 = Array(historicalMetrics.suffix(7))
-        let calendar = Calendar.current
         let todayStart = calendar.startOfDay(for: Date())
         if !last7.contains(where: { calendar.isDate($0.date, inSameDayAs: todayStart) }) {
             let todayMetric = DailyMetrics(
-                date: todayStart,
-                recoveryScore: hkManager.todayRecovery,
-                strainScore: hkManager.todayStrain,
-                sleepScore: score,
-                hrv: hkManager.todayHRV,
-                rhr: hkManager.todayRHR,
-                sleepDuration: duration,
-                sleepNeeded: needed,
-                deepMinutes: deep,
-                remMinutes: rem,
-                activeCalories: hkManager.todayActiveCalories,
-                averageHR: hkManager.todayAverageHR > 0 ? hkManager.todayAverageHR : (hkManager.todayRHR > 0 ? hkManager.todayRHR + 20.0 : 80.0),
-                maxHR: hkManager.todayMaxHR > 0 ? hkManager.todayMaxHR : (hkManager.todayRHR > 0 ? hkManager.todayRHR + 65.0 : 140.0),
-                steps: hkManager.todaySteps,
-                respiratoryRate: hkManager.todayRespiratoryRate,
-                oxygenSaturation: hkManager.todayOxygenSaturation,
-                bodyTemperature: hkManager.todayBodyTemperature
+                date: todayStart, recoveryScore: hkManager.todayRecovery, strainScore: hkManager.todayStrain,
+                sleepScore: score, hrv: hkManager.todayHRV, rhr: hkManager.todayRHR, sleepDuration: duration,
+                sleepNeeded: needed, deepMinutes: deep, remMinutes: rem, activeCalories: hkManager.todayActiveCalories,
+                averageHR: hkManager.todayAverageHR > 0 ? hkManager.todayAverageHR : 80,
+                maxHR: hkManager.todayMaxHR > 0 ? hkManager.todayMaxHR : 140,
+                steps: hkManager.todaySteps, respiratoryRate: hkManager.todayRespiratoryRate,
+                oxygenSaturation: hkManager.todayOxygenSaturation, bodyTemperature: hkManager.todayBodyTemperature
             )
             last7.append(todayMetric)
             if last7.count > 7 { last7.removeFirst() }
         }
-        
         let validLast7 = last7.filter { $0.sleepDuration > 0 }
-        let totalDebt = validLast7.reduce(0.0) { sum, m in
-            sum + max(0.0, m.sleepNeeded - m.sleepDuration)
-        }
-        let dailyDebtContribution = validLast7.isEmpty ? 0.0 : totalDebt / Double(validLast7.count)
-        
-        // Cap debt extension at 2 hours (120 minutes)
-        let debtExtensionMins = Int(min(120.0, dailyDebtContribution * 60.0))
-        
-        let totalExtensionHours = Double(strainExtensionMins + debtExtensionMins) / 60.0
-        let totalHours = baseNeeded + totalExtensionHours
-        
-        return (totalHours, strainExtensionMins, debtExtensionMins)
+        let totalDebt = validLast7.reduce(0.0) { $0 + max(0, $1.sleepNeeded - $1.sleepDuration) }
+        let dailyDebt = validLast7.isEmpty ? 0.0 : totalDebt / Double(validLast7.count)
+        let debtMins = Int(min(120, dailyDebt * 60))
+        return (baseNeeded + Double(strainExtensionMins + debtMins) / 60.0, strainExtensionMins, debtMins)
     }
-    
+
+    // Historical sleep analysis for a past day (for past day outlook card)
+    private var historicalSleepAnalysis: (recommendedHours: Double, actualHours: Double, surplus: Double)? {
+        guard !isViewingToday && selectedTimeframe == .day else { return nil }
+        guard let dayData = historicalMetrics.first(where: { calendar.isDate($0.date, inSameDayAs: selectedDayDate) }) else { return nil }
+        // Prior day's strain drives sleep need
+        let priorDay = calendar.date(byAdding: .day, value: -1, to: selectedDayDate)!
+        let priorStrain = historicalMetrics.first(where: { calendar.isDate($0.date, inSameDayAs: priorDay) })?.strainScore ?? 0
+        let recommendedHours = 8.0 + (priorStrain * 3.5 / 60.0)
+        let actualHours = dayData.sleepDuration
+        let surplus = actualHours - recommendedHours
+        return (recommendedHours, actualHours, surplus)
+    }
+
+    // MARK: - Chart data
     private func getSleepData(isScore: Bool) -> TimeframeData {
-        let calendar = Calendar.current
-        
         switch selectedTimeframe {
         case .day:
-            let base = isScore ? Double(score) : duration
-            let rawBase = base > 0 ? base : (isScore ? 80.0 : 8.0)
-            let points = isScore
-                ? [rawBase * 0.1, rawBase * 0.5, rawBase * 0.85, rawBase, rawBase, rawBase, rawBase, rawBase]
-                : [rawBase * 0.125, rawBase * 0.5, rawBase * 0.875, rawBase, rawBase, rawBase, rawBase, rawBase]
-            let labels = ["12am", "3am", "6am", "9am", "12pm", "3pm", "6pm", "9pm"]
-            return TimeframeData(points: points, labels: labels, average: rawBase)
-            
+            let base = isScore ? Double(displayedScore) : displayedDuration
+            guard base > 0 else { return TimeframeData(points: [], labels: [], average: 0) }
+            let pts = isScore
+                ? [base*0.1, base*0.5, base*0.85, base, base, base, base, base]
+                : [base*0.125, base*0.5, base*0.875, base, base, base, base, base]
+            return TimeframeData(points: pts, labels: ["12am","3am","6am","9am","12pm","3pm","6pm","9pm"], average: base)
+
+        case .threeDays:
+            let valid = filteredMetrics.filter { isScore ? $0.sleepScore > 0 : $0.sleepDuration > 0 }
+            let pts = valid.map { isScore ? Double($0.sleepScore) : $0.sleepDuration }
+            let fmt = DateFormatter(); fmt.dateFormat = "E"
+            let labels = valid.map { fmt.string(from: $0.date) }
+            let avg = pts.isEmpty ? 0 : pts.reduce(0,+) / Double(pts.count)
+            return TimeframeData(points: pts, labels: labels, average: avg)
+
         case .week:
-            let last7 = filteredMetrics.filter { isScore ? $0.sleepScore > 0 : $0.sleepDuration > 0 }
-            let points = last7.map { isScore ? Double($0.sleepScore) : $0.sleepDuration }
-            let formatter = DateFormatter()
-            formatter.dateFormat = "E"
-            let labels = last7.map { formatter.string(from: $0.date) }
-            let average = points.isEmpty ? 0.0 : points.reduce(0, +) / Double(points.count)
-            return TimeframeData(points: points, labels: labels, average: average)
-            
+            let valid = filteredMetrics.filter { isScore ? $0.sleepScore > 0 : $0.sleepDuration > 0 }
+            let pts = valid.map { isScore ? Double($0.sleepScore) : $0.sleepDuration }
+            let fmt = DateFormatter(); fmt.dateFormat = "E"
+            let labels = valid.map { fmt.string(from: $0.date) }
+            let avg = pts.isEmpty ? 0 : pts.reduce(0,+) / Double(pts.count)
+            return TimeframeData(points: pts, labels: labels, average: avg)
+
         case .month:
-            let last30 = filteredMetrics.filter { isScore ? $0.sleepScore > 0 : $0.sleepDuration > 0 }
-            let points = last30.map { isScore ? Double($0.sleepScore) : $0.sleepDuration }
-            let labels = ["W1", "W2", "W3", "W4"]
-            let average = points.isEmpty ? 0.0 : points.reduce(0, +) / Double(points.count)
-            return TimeframeData(points: points, labels: labels, average: average)
-            
+            let valid = filteredMetrics.filter { isScore ? $0.sleepScore > 0 : $0.sleepDuration > 0 }
+            let pts = valid.map { isScore ? Double($0.sleepScore) : $0.sleepDuration }
+            let avg = pts.isEmpty ? 0 : pts.reduce(0,+) / Double(pts.count)
+            return TimeframeData(points: pts, labels: ["W1","W2","W3","W4"], average: avg)
+
+        case .sixMonths:
+            let valid6M = filteredMetrics.filter { isScore ? $0.sleepScore > 0 : $0.sleepDuration > 0 }
+            var sums6M: [Int: Double] = [:]; var counts6M: [Int: Double] = [:]; var dates6M: [Int: Date] = [:]
+            for m in valid6M {
+                let mo = calendar.component(.month, from: m.date)
+                sums6M[mo, default: 0] += isScore ? Double(m.sleepScore) : m.sleepDuration
+                counts6M[mo, default: 0] += 1
+                dates6M[mo] = m.date
+            }
+            let sorted6M = dates6M.keys.sorted { dates6M[$0]! < dates6M[$1]! }
+            let pts6M = sorted6M.map { (sums6M[$0] ?? 0) / (counts6M[$0] ?? 1) }
+            let fmt6M = DateFormatter(); fmt6M.dateFormat = "MMM"
+            let labels6M = sorted6M.map { fmt6M.string(from: dates6M[$0]!) }
+            let avg6M = pts6M.isEmpty ? 0 : pts6M.reduce(0,+) / Double(pts6M.count)
+            return TimeframeData(points: pts6M, labels: labels6M, average: avg6M)
+
         case .year:
-            let validMetrics = filteredMetrics.filter { isScore ? $0.sleepScore > 0 : $0.sleepDuration > 0 }
-            var monthlySums: [Int: Double] = [:]
-            var monthlyCounts: [Int: Double] = [:]
-            var monthlyDates: [Int: Date] = [:]
-            for m in validMetrics {
-                let month = calendar.component(.month, from: m.date)
-                let val = isScore ? Double(m.sleepScore) : m.sleepDuration
-                monthlySums[month, default: 0.0] += val
-                monthlyCounts[month, default: 0.0] += 1.0
-                monthlyDates[month] = m.date
+            let valid = filteredMetrics.filter { isScore ? $0.sleepScore > 0 : $0.sleepDuration > 0 }
+            var sums: [Int: Double] = [:]; var counts: [Int: Double] = [:]; var dates: [Int: Date] = [:]
+            for m in valid {
+                let mo = calendar.component(.month, from: m.date)
+                sums[mo, default: 0] += isScore ? Double(m.sleepScore) : m.sleepDuration
+                counts[mo, default: 0] += 1
+                dates[mo] = m.date
             }
-            let sortedMonths = monthlyDates.keys.sorted { m1, m2 in
-                monthlyDates[m1]! < monthlyDates[m2]!
-            }
-            let points = sortedMonths.map { month in
-                (monthlySums[month] ?? 0.0) / (monthlyCounts[month] ?? 1.0)
-            }
-            let formatter = DateFormatter()
-            formatter.dateFormat = "MMM"
-            let labels = sortedMonths.map { month in
-                formatter.string(from: monthlyDates[month]!)
-            }
-            let average = points.isEmpty ? 0.0 : points.reduce(0, +) / Double(points.count)
-            return TimeframeData(points: points, labels: labels, average: average)
+            let sorted = dates.keys.sorted { dates[$0]! < dates[$1]! }
+            let pts = sorted.map { (sums[$0] ?? 0) / (counts[$0] ?? 1) }
+            let fmt = DateFormatter(); fmt.dateFormat = "MMM"
+            let labels = sorted.map { fmt.string(from: dates[$0]!) }
+            let avg = pts.isEmpty ? 0 : pts.reduce(0,+) / Double(pts.count)
+            return TimeframeData(points: pts, labels: labels, average: avg)
         }
     }
-    
+
+    // MARK: - Body
     var body: some View {
         ZStack {
-            Theme.Colors.background
-                .ignoresSafeArea()
-            
+            Theme.Colors.background.ignoresSafeArea()
+
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 20) {
                     CustomSegmentedPicker(selection: $selectedTimeframe)
                         .padding(.top, 10)
+                        .onChange(of: selectedTimeframe) { _, _ in
+                            baseDate = calendar.startOfDay(for: Date())
+                            selectedDayDate = calendar.startOfDay(for: Date())
+                            historicalDaySleepStages = []
+                        }
+
+                    // Period / day navigation bar
+                    PeriodNavigationView(
+                        timeframe: selectedTimeframe,
+                        baseDate: selectedTimeframe == .day ? $selectedDayDate : $baseDate,
+                        accentColor: Theme.Colors.sleepDeep
+                    )
+                    .onChange(of: selectedDayDate) { _, newDate in
+                        if selectedTimeframe == .day && !calendar.isDateInToday(newDate) {
+                            historicalDaySleepStages = hkManager.loadSleepStages(for: newDate)
+                        } else {
+                            historicalDaySleepStages = []
+                        }
+                    }
 
                     // Compact Score Card
                     HStack(spacing: 18) {
@@ -213,9 +246,8 @@ struct SleepDetailView: View {
                             Circle()
                                 .stroke(Theme.Colors.sleepLight.opacity(0.08), lineWidth: 6)
                                 .frame(width: 64, height: 64)
-                            
                             Circle()
-                                .trim(from: 0.0, to: CGFloat(Double(displayScore) / 100.0))
+                                .trim(from: 0, to: CGFloat(Double(displayScore) / 100.0))
                                 .stroke(
                                     LinearGradient(colors: [Theme.Colors.sleepLight, Theme.Colors.sleepLight.opacity(0.6)], startPoint: .top, endPoint: .bottom),
                                     style: StrokeStyle(lineWidth: 6, lineCap: .round)
@@ -223,18 +255,16 @@ struct SleepDetailView: View {
                                 .frame(width: 64, height: 64)
                                 .rotationEffect(.degrees(-90))
                                 .shadow(color: Theme.Colors.sleepLight.opacity(0.3), radius: 4)
-                            
-                            Text("\(displayScore)%")
+                            Text(displayScore > 0 ? "\(displayScore)%" : "--")
                                 .font(Theme.Typography.roundedFont(size: 14, weight: .bold))
                                 .foregroundColor(.white)
                         }
                         .frame(width: 64, height: 64)
-                        
+
                         VStack(alignment: .leading, spacing: 4) {
                             Text("SLEEP QUALITY SCORE")
                                 .font(Theme.Typography.roundedFont(size: 13, weight: .bold))
                                 .foregroundColor(Theme.Colors.sleepLight)
-                            
                             Text(String(format: "Typical duration needed: %.1f hrs", needed))
                                 .font(Theme.Typography.roundedFont(size: 11, weight: .regular))
                                 .foregroundColor(.white.opacity(0.6))
@@ -244,145 +274,181 @@ struct SleepDetailView: View {
                     .frame(maxWidth: .infinity, minHeight: 80, maxHeight: 80, alignment: .leading)
                     .glassCard()
                     .padding(.horizontal)
-                    
-                    // 1. Predictive Sleep Requirements Card (Today planning)
-                    let sleepNeed = predictedSleepNeeded
-                    VStack(alignment: .leading, spacing: 14) {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("TONIGHT'S OUTLOOK")
-                                    .font(Theme.Typography.cardTitle)
-                                    .foregroundColor(.white.opacity(0.5))
-                                
-                                Text("Sleep Need Recommendation")
-                                    .font(Theme.Typography.roundedFont(size: 15, weight: .bold))
-                                    .foregroundColor(.white)
-                            }
-                            Spacer()
-                            Image(systemName: "moon.stars.fill")
-                                .font(.title3)
-                                .foregroundColor(Theme.Colors.sleepLight)
-                        }
-                        
-                        HStack(alignment: .bottom, spacing: 2) {
-                            let hours = Int(sleepNeed.totalHours)
-                            let mins = Int((sleepNeed.totalHours - Double(hours)) * 60.0)
-                            Text("\(hours)h \(mins)m")
-                                .font(Theme.Typography.metricLabel(size: 36))
-                                .foregroundColor(.white)
-                            
-                            Text("Needed Tonight")
-                                .font(Theme.Typography.roundedFont(size: 13, weight: .bold))
-                                .foregroundColor(.white.opacity(0.4))
-                                .padding(.bottom, 6)
-                        }
-                        
-                        // Extension breakdown list
-                        VStack(spacing: 8) {
+
+                    // Sleep Need Outlook
+                    if selectedTimeframe == .day && isViewingToday {
+                        let sleepNeed = predictedSleepNeeded
+                        VStack(alignment: .leading, spacing: 14) {
                             HStack {
-                                Text("Baseline sleep requirement:")
-                                    .font(Theme.Typography.roundedFont(size: 12, weight: .regular))
-                                    .foregroundColor(.white.opacity(0.5))
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(isStaleLabelActive ? "LATEST SLEEP OUTLOOK (\(formatDate(hkManager.sleepDataDate)))" : "TONIGHT'S OUTLOOK")
+                                        .font(Theme.Typography.cardTitle)
+                                        .foregroundColor(.white.opacity(0.5))
+                                    Text("Sleep Need Recommendation")
+                                        .font(Theme.Typography.roundedFont(size: 15, weight: .bold))
+                                        .foregroundColor(.white)
+                                }
                                 Spacer()
-                                Text(String(format: "%.1f hrs", needed))
-                                    .font(Theme.Typography.roundedFont(size: 12, weight: .bold))
+                                Image(systemName: "moon.stars.fill")
+                                    .font(.title3)
+                                    .foregroundColor(Theme.Colors.sleepLight)
+                            }
+
+                            HStack(alignment: .bottom, spacing: 2) {
+                                let hours = Int(sleepNeed.totalHours)
+                                let mins = Int((sleepNeed.totalHours - Double(hours)) * 60)
+                                Text("\(hours)h \(mins)m")
+                                    .font(Theme.Typography.metricLabel(size: 36))
                                     .foregroundColor(.white)
+                                Text("Needed Tonight")
+                                    .font(Theme.Typography.roundedFont(size: 13, weight: .bold))
+                                    .foregroundColor(.white.opacity(0.4))
+                                    .padding(.bottom, 6)
                             }
-                            
-                            if sleepNeed.strainAdditionMins > 0 {
-                                  HStack {
-                                      Text("Cardio Strain extra repair time:")
-                                          .font(Theme.Typography.roundedFont(size: 12, weight: .regular))
-                                          .foregroundColor(.white.opacity(0.5))
-                                      Spacer()
-                                      Text("+\(sleepNeed.strainAdditionMins) mins")
-                                          .font(Theme.Typography.roundedFont(size: 12, weight: .bold))
-                                          .foregroundColor(Theme.Colors.strainHigh)
-                                  }
+
+                            VStack(spacing: 8) {
+                                HStack {
+                                    Text("Baseline sleep requirement:")
+                                        .font(Theme.Typography.roundedFont(size: 12, weight: .regular))
+                                        .foregroundColor(.white.opacity(0.5))
+                                    Spacer()
+                                    Text(String(format: "%.1f hrs", needed))
+                                        .font(Theme.Typography.roundedFont(size: 12, weight: .bold))
+                                        .foregroundColor(.white)
+                                }
+                                if sleepNeed.strainAdditionMins > 0 {
+                                    HStack {
+                                        Text("Cardio Strain extra repair time:")
+                                            .font(Theme.Typography.roundedFont(size: 12, weight: .regular))
+                                            .foregroundColor(.white.opacity(0.5))
+                                        Spacer()
+                                        Text("+\(sleepNeed.strainAdditionMins) mins")
+                                            .font(Theme.Typography.roundedFont(size: 12, weight: .bold))
+                                            .foregroundColor(Theme.Colors.strainHigh)
+                                    }
+                                }
+                                if sleepNeed.debtAdditionMins > 0 {
+                                    HStack {
+                                        Text("Accumulated sleep debt recovery:")
+                                            .font(Theme.Typography.roundedFont(size: 12, weight: .regular))
+                                            .foregroundColor(.white.opacity(0.5))
+                                        Spacer()
+                                        Text("+\(sleepNeed.debtAdditionMins) mins")
+                                            .font(Theme.Typography.roundedFont(size: 12, weight: .bold))
+                                            .foregroundColor(Color.orange)
+                                    }
+                                }
                             }
-                            
-                            if sleepNeed.debtAdditionMins > 0 {
-                                  HStack {
-                                      Text("Accumulated sleep debt recovery:")
-                                          .font(Theme.Typography.roundedFont(size: 12, weight: .regular))
-                                          .foregroundColor(.white.opacity(0.5))
-                                      Spacer()
-                                      Text("+\(sleepNeed.debtAdditionMins) mins")
-                                          .font(Theme.Typography.roundedFont(size: 12, weight: .bold))
-                                          .foregroundColor(Color.orange)
-                                  }
-                            }
+                            .padding(12)
+                            .background(Color.white.opacity(0.02))
+                            .cornerRadius(8)
+
+                            Text("Predicted sleep duration adapts to daily physical strain levels and outstanding sleep debt to facilitate optimal cognitive and physical recovery.")
+                                .font(Theme.Typography.roundedFont(size: 11, weight: .regular))
+                                .foregroundColor(.white.opacity(0.5))
                         }
-                        .padding(12)
-                        .background(Color.white.opacity(0.02))
-                        .cornerRadius(8)
-                        
-                        Text("Predicted sleep duration adapts to daily physical strain levels and outstanding sleep debt to facilitate optimal cognitive and physical recovery.")
-                            .font(Theme.Typography.roundedFont(size: 11, weight: .regular))
-                            .foregroundColor(.white.opacity(0.5))
+                        .glassCard()
+                        .padding(.horizontal)
+                    } else if selectedTimeframe == .day && !isViewingToday {
+                        // Historical day outlook card
+                        if let analysis = historicalSleepAnalysis {
+                            VStack(alignment: .leading, spacing: 14) {
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text("SLEEP ANALYSIS FOR \(formatDate(selectedDayDate).uppercased())")
+                                            .font(Theme.Typography.cardTitle)
+                                            .foregroundColor(.white.opacity(0.5))
+                                        Text("Sleep Duration & Need")
+                                            .font(Theme.Typography.roundedFont(size: 15, weight: .bold))
+                                            .foregroundColor(.white)
+                                    }
+                                    Spacer()
+                                    Image(systemName: "moon.stars.fill")
+                                        .font(.title3)
+                                        .foregroundColor(Theme.Colors.sleepLight)
+                                }
+
+                                HStack(alignment: .bottom, spacing: 2) {
+                                    Text(analysis.actualHours > 0 ? formatSleepHours(analysis.actualHours) : "--")
+                                        .font(Theme.Typography.metricLabel(size: 36))
+                                        .foregroundColor(.white)
+                                    Text("Actual Sleep")
+                                        .font(Theme.Typography.roundedFont(size: 13, weight: .bold))
+                                        .foregroundColor(.white.opacity(0.4))
+                                        .padding(.bottom, 6)
+                                }
+
+                                VStack(spacing: 8) {
+                                    HStack {
+                                        Text("Recommended sleep:")
+                                            .font(Theme.Typography.roundedFont(size: 12, weight: .regular))
+                                            .foregroundColor(.white.opacity(0.5))
+                                        Spacer()
+                                        Text(String(format: "%.1f hrs", analysis.recommendedHours))
+                                            .font(Theme.Typography.roundedFont(size: 12, weight: .bold))
+                                            .foregroundColor(.white)
+                                    }
+                                    HStack {
+                                        Text("Sleep surplus / deficit:")
+                                            .font(Theme.Typography.roundedFont(size: 12, weight: .regular))
+                                            .foregroundColor(.white.opacity(0.5))
+                                        Spacer()
+                                        let surplusText = analysis.surplus >= 0 ? String(format: "+%.1f hrs", analysis.surplus) : String(format: "%.1f hrs", analysis.surplus)
+                                        Text(surplusText)
+                                            .font(Theme.Typography.roundedFont(size: 12, weight: .bold))
+                                            .foregroundColor(analysis.surplus >= 0 ? Theme.Colors.recoveryHigh : Theme.Colors.recoveryLow)
+                                    }
+                                }
+                                .padding(12)
+                                .background(Color.white.opacity(0.02))
+                                .cornerRadius(8)
+                            }
+                            .glassCard()
+                            .padding(.horizontal)
+                        }
                     }
-                    .glassCard()
-                    .padding(.horizontal)
-                    
-                    // COHERENT CARD 2: Unified Sleep Quality & Duration Trends (Tabbed)
+
+                    // Sleep Quality & Duration Trends (Tabbed)
                     VStack(alignment: .leading, spacing: 14) {
                         HStack(spacing: 12) {
-                            Button(action: {
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    selectedGraphTab = 0
-                                }
-                            }) {
+                            Button(action: { withAnimation(.easeInOut(duration: 0.2)) { selectedGraphTab = 0 } }) {
                                 Text("Quality Score")
                                     .font(Theme.Typography.roundedFont(size: 13, weight: .bold))
                                     .foregroundColor(selectedGraphTab == 0 ? .white : .white.opacity(0.4))
-                                    .padding(.vertical, 6)
-                                    .padding(.horizontal, 12)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 6)
-                                            .fill(selectedGraphTab == 0 ? Color.white.opacity(0.08) : Color.clear)
-                                    )
+                                    .padding(.vertical, 6).padding(.horizontal, 12)
+                                    .background(RoundedRectangle(cornerRadius: 6).fill(selectedGraphTab == 0 ? Color.white.opacity(0.08) : Color.clear))
                             }
                             .buttonStyle(PlainButtonStyle())
-                            
-                            Button(action: {
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    selectedGraphTab = 1
-                                }
-                            }) {
+
+                            Button(action: { withAnimation(.easeInOut(duration: 0.2)) { selectedGraphTab = 1 } }) {
                                 Text("Duration (Hrs)")
                                     .font(Theme.Typography.roundedFont(size: 13, weight: .bold))
                                     .foregroundColor(selectedGraphTab == 1 ? .white : .white.opacity(0.4))
-                                    .padding(.vertical, 6)
-                                    .padding(.horizontal, 12)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 6)
-                                            .fill(selectedGraphTab == 1 ? Color.white.opacity(0.08) : Color.clear)
-                                    )
+                                    .padding(.vertical, 6).padding(.horizontal, 12)
+                                    .background(RoundedRectangle(cornerRadius: 6).fill(selectedGraphTab == 1 ? Color.white.opacity(0.08) : Color.clear))
                             }
                             .buttonStyle(PlainButtonStyle())
-                            
                             Spacer()
                         }
                         .padding(.bottom, 4)
-                        
+
                         if selectedGraphTab == 0 {
                             let trendData = getSleepData(isScore: true)
                             VStack(alignment: .leading, spacing: 12) {
-                                CustomLineGraph(
-                                    points: trendData.points,
-                                    labels: trendData.labels,
-                                    lineColor: Theme.Colors.sleepLight,
-                                    gradientColors: [Theme.Colors.sleepLight.opacity(0.2), .clear]
-                                )
-                                .frame(height: 140)
-                                .transition(.opacity)
-                                
+                                if trendData.points.isEmpty {
+                                    noDataPlaceholder
+                                } else {
+                                    CustomLineGraph(points: trendData.points, labels: trendData.labels,
+                                                    lineColor: Theme.Colors.sleepLight,
+                                                    gradientColors: [Theme.Colors.sleepLight.opacity(0.2), .clear])
+                                        .frame(height: 140).transition(.opacity)
+                                }
                                 HStack {
-                                    Text(String(format: "Average Score: %.0f%%", trendData.average))
+                                    Text(trendData.points.isEmpty ? "No data" : String(format: "Average Score: %.0f%%", trendData.average))
                                         .font(Theme.Typography.roundedFont(size: 12, weight: .semibold))
                                         .foregroundColor(.white.opacity(0.7))
                                     Spacer()
-                                    Text("Today's Score: \(score)%")
+                                    Text(displayScore > 0 ? "\(displayScore)%" : "--")
                                         .font(Theme.Typography.roundedFont(size: 12, weight: .bold))
                                         .foregroundColor(Theme.Colors.sleepLight)
                                 }
@@ -391,21 +457,20 @@ struct SleepDetailView: View {
                         } else {
                             let trendData = getSleepData(isScore: false)
                             VStack(alignment: .leading, spacing: 12) {
-                                CustomLineGraph(
-                                    points: trendData.points,
-                                    labels: trendData.labels,
-                                    lineColor: Theme.Colors.sleepREM,
-                                    gradientColors: [Theme.Colors.sleepREM.opacity(0.2), .clear]
-                                )
-                                .frame(height: 140)
-                                .transition(.opacity)
-                                
+                                if trendData.points.isEmpty {
+                                    noDataPlaceholder
+                                } else {
+                                    CustomLineGraph(points: trendData.points, labels: trendData.labels,
+                                                    lineColor: Theme.Colors.sleepREM,
+                                                    gradientColors: [Theme.Colors.sleepREM.opacity(0.2), .clear])
+                                        .frame(height: 140).transition(.opacity)
+                                }
                                 HStack {
-                                    Text(String(format: "Average Sleep: %.1f hrs", trendData.average))
+                                    Text(trendData.points.isEmpty ? "No data" : String(format: "Average Sleep: %.1f hrs", trendData.average))
                                         .font(Theme.Typography.roundedFont(size: 12, weight: .semibold))
                                         .foregroundColor(.white.opacity(0.7))
                                     Spacer()
-                                    Text(String(format: "Today: %.1f hrs", duration))
+                                    Text(displayedDuration > 0 ? formatSleepHours(displayedDuration) : "--")
                                         .font(Theme.Typography.roundedFont(size: 12, weight: .bold))
                                         .foregroundColor(Theme.Colors.sleepREM)
                                 }
@@ -415,90 +480,97 @@ struct SleepDetailView: View {
                     }
                     .glassCard()
                     .padding(.horizontal)
-                    
-                    // Tonight's Hypnogram (Only visible in Week/Today context)
-                    if selectedTimeframe == .day || selectedTimeframe == .week {
-                        SleepHypnogramChart(samples: hkManager.todaySleepStages)
+
+                    // Hypnogram (day + week view)
+                    if selectedTimeframe == .day || selectedTimeframe == .week || selectedTimeframe == .threeDays {
+                        SleepHypnogramChart(samples: displayedSleepStages)
                             .padding(.horizontal)
                     }
-                    
-                    // COHERENT CARD 3: Recalculating Sleep Architecture (ALWAYS SHOWN)
+
+                    // Sleep Architecture
                     VStack(alignment: .leading, spacing: 16) {
-                        Text(selectedTimeframe == .day ? "Tonight's Sleep Architecture" : (selectedTimeframe == .week ? "Weekly Average Architecture" : (selectedTimeframe == .month ? "Monthly Average Architecture" : "Annual Average Architecture")))
+                        let archTitle: String = {
+                            if selectedTimeframe == .day {
+                                if !isViewingToday {
+                                    return "Sleep Architecture (\(formatDate(selectedDayDate)))"
+                                }
+                                return isStaleLabelActive ? "Sleep Architecture (\(formatDate(hkManager.sleepDataDate)))" : "Tonight's Sleep Architecture"
+                            }
+                            switch selectedTimeframe {
+                            case .threeDays: return "3-Day Average Architecture"
+                            case .week: return "Weekly Average Architecture"
+                            case .month: return "Monthly Average Architecture"
+                            case .sixMonths: return "6-Month Average Architecture"
+                            default: return "Annual Average Architecture"
+                            }
+                        }()
+                        Text(archTitle)
                             .font(Theme.Typography.roundedFont(size: 16, weight: .bold))
                             .foregroundColor(.white)
-                        
-                        let filteredMetrics: [DailyMetrics] = {
+
+                        let archMetrics: [DailyMetrics] = {
                             switch selectedTimeframe {
-                            case .day:
-                                return []
-                            case .week:
-                                return Array(historicalMetrics.suffix(7)).filter { $0.sleepDuration > 0 }
-                            case .month:
-                                return Array(historicalMetrics.suffix(30)).filter { $0.sleepDuration > 0 }
-                            case .year:
-                                return historicalMetrics.filter { $0.sleepDuration > 0 }
+                            case .day: return []
+                            case .threeDays: return filteredMetrics.filter { $0.sleepDuration > 0 }
+                            case .week: return filteredMetrics.filter { $0.sleepDuration > 0 }
+                            case .month: return filteredMetrics.filter { $0.sleepDuration > 0 }
+                            case .sixMonths: return filteredMetrics.filter { $0.sleepDuration > 0 }
+                            case .year: return filteredMetrics.filter { $0.sleepDuration > 0 }
                             }
                         }()
-                        
-                        let avgDuration = filteredMetrics.isEmpty ? duration : (filteredMetrics.map { $0.sleepDuration }.reduce(0.0, +) / Double(filteredMetrics.count))
-                        let avgDeep = filteredMetrics.isEmpty ? deep : (filteredMetrics.map { $0.deepMinutes }.reduce(0.0, +) / Double(filteredMetrics.count))
-                        let avgRem = filteredMetrics.isEmpty ? rem : (filteredMetrics.map { $0.remMinutes }.reduce(0.0, +) / Double(filteredMetrics.count))
-                        
+
+                        let avgDuration = archMetrics.isEmpty ? displayedDuration : archMetrics.map { $0.sleepDuration }.reduce(0,+) / Double(archMetrics.count)
+                        let avgDeep = archMetrics.isEmpty ? displayedDeep : archMetrics.map { $0.deepMinutes }.reduce(0,+) / Double(archMetrics.count)
+                        let avgRem = archMetrics.isEmpty ? displayedRem : archMetrics.map { $0.remMinutes }.reduce(0,+) / Double(archMetrics.count)
+
                         let awakeMins: Double = {
                             if selectedTimeframe == .day {
-                                let awakeSamples = hkManager.todaySleepStages.filter { $0.stage == 0 }
-                                let totalAwakeSecs = awakeSamples.reduce(0.0) { sum, sample in
-                                    sum + sample.endDate.timeIntervalSince(sample.startDate)
-                                }
-                                return totalAwakeSecs > 0 ? totalAwakeSecs / 60.0 : (duration > 0 ? 24.0 : 0.0)
-                            } else {
-                                return avgDuration > 0 ? 24.0 : 0.0
+                                let awakeSamples = displayedSleepStages.filter { $0.stage == 0 }
+                                let totalSecs = awakeSamples.reduce(0.0) { $0 + $1.endDate.timeIntervalSince($1.startDate) }
+                                return totalSecs > 0 ? totalSecs / 60.0 : (displayedDuration > 0 ? 24.0 : 0.0)
                             }
+                            return avgDuration > 0 ? 24.0 : 0.0
                         }()
-                        
-                        let deepMins = avgDeep
-                        let remMins = avgRem
-                        let lightMins = max(0.0, (avgDuration * 60.0) - deepMins - remMins)
-                        
-                        let totalSessionMinutes = awakeMins + lightMins + remMins + deepMins
-                        
-                        let awakeRatio = totalSessionMinutes > 0 ? awakeMins / totalSessionMinutes : 0.05
-                        let lightRatio = totalSessionMinutes > 0 ? lightMins / totalSessionMinutes : 0.60
-                        let remRatio = totalSessionMinutes > 0 ? remMins / totalSessionMinutes : 0.20
-                        let deepRatio = totalSessionMinutes > 0 ? deepMins / totalSessionMinutes : 0.15
-                        
-                        GeometryReader { geo in
-                            HStack(spacing: 0) {
-                                Color.orange.opacity(0.8)
-                                    .frame(width: geo.size.width * CGFloat(awakeRatio))
-                                Theme.Colors.sleepLight
-                                    .frame(width: geo.size.width * CGFloat(lightRatio))
-                                Theme.Colors.sleepREM
-                                    .frame(width: geo.size.width * CGFloat(remRatio))
-                                Theme.Colors.sleepDeep
-                                    .frame(width: geo.size.width * CGFloat(deepRatio))
+
+                        let lightMins = max(0.0, (avgDuration * 60.0) - avgDeep - avgRem)
+                        let total = awakeMins + lightMins + avgRem + avgDeep
+
+                        if total > 0 {
+                            let awakeR = awakeMins / total
+                            let lightR  = lightMins / total
+                            let remR    = avgRem / total
+                            let deepR   = avgDeep / total
+
+                            GeometryReader { geo in
+                                HStack(spacing: 0) {
+                                    Color.orange.opacity(0.8).frame(width: geo.size.width * CGFloat(awakeR))
+                                    Theme.Colors.sleepLight.frame(width: geo.size.width * CGFloat(lightR))
+                                    Theme.Colors.sleepREM.frame(width: geo.size.width * CGFloat(remR))
+                                    Theme.Colors.sleepDeep.frame(width: geo.size.width * CGFloat(deepR))
+                                }
+                                .clipShape(RoundedRectangle(cornerRadius: 6))
                             }
-                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                            .frame(height: 24)
+
+                            let deepPct  = Int(round(deepR  * 100))
+                            let remPct   = Int(round(remR   * 100))
+                            let lightPct = Int(round(lightR * 100))
+                            let awakePct = max(0, 100 - deepPct - remPct - lightPct)
+
+                            LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
+                                SleepStageCard(stageName: "Awake",      minutes: awakeMins, percentage: awakePct, color: .orange,                  icon: "sun.max.fill")
+                                SleepStageCard(stageName: "Light Sleep", minutes: lightMins, percentage: lightPct, color: Theme.Colors.sleepLight,  icon: "moon.fill")
+                                SleepStageCard(stageName: "REM Sleep",   minutes: avgRem,    percentage: remPct,   color: Theme.Colors.sleepREM,    icon: "sparkles")
+                                SleepStageCard(stageName: "Deep Sleep",  minutes: avgDeep,   percentage: deepPct,  color: Theme.Colors.sleepDeep,   icon: "moon.stars.fill")
+                            }
+                            .padding(.top, 8)
+                        } else {
+                            noDataPlaceholder
                         }
-                        .frame(height: 24)
-                        
-                        let deepPct = totalSessionMinutes > 0 ? Int(round((deepMins / totalSessionMinutes) * 100)) : 0
-                        let remPct = totalSessionMinutes > 0 ? Int(round((remMins / totalSessionMinutes) * 100)) : 0
-                        let lightPct = totalSessionMinutes > 0 ? Int(round((lightMins / totalSessionMinutes) * 100)) : 0
-                        let awakePct = totalSessionMinutes > 0 ? max(0, 100 - deepPct - remPct - lightPct) : 0
-                        
-                        LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
-                            SleepStageCard(stageName: "Awake", minutes: awakeMins, percentage: awakePct, color: Color.orange, icon: "sun.max.fill")
-                            SleepStageCard(stageName: "Light Sleep", minutes: lightMins, percentage: lightPct, color: Theme.Colors.sleepLight, icon: "moon.fill")
-                            SleepStageCard(stageName: "REM Sleep", minutes: remMins, percentage: remPct, color: Theme.Colors.sleepREM, icon: "sparkles")
-                            SleepStageCard(stageName: "Deep Sleep", minutes: deepMins, percentage: deepPct, color: Theme.Colors.sleepDeep, icon: "moon.stars.fill")
-                        }
-                        .padding(.top, 8)
                     }
                     .glassCard()
                     .padding(.horizontal)
-                    
+
                     // Sleep Debt Status
                     VStack(alignment: .leading, spacing: 12) {
                         HStack {
@@ -506,13 +578,12 @@ struct SleepDetailView: View {
                                 .font(Theme.Typography.roundedFont(size: 16, weight: .bold))
                                 .foregroundColor(.white)
                             Spacer()
-                            Image(systemName: "hourglass.badge.plus")
-                                .foregroundColor(.orange)
+                            Image(systemName: "hourglass.badge.plus").foregroundColor(.orange)
                         }
-                        
+
                         let debt = max(0.0, needed - displayDuration)
                         HStack(alignment: .bottom) {
-                            Text(String(format: "%.1f hrs", debt))
+                            Text(displayDuration > 0 ? String(format: "%.1f hrs", debt) : "--")
                                 .font(Theme.Typography.metricLabel(size: 32))
                                 .foregroundColor(debt > 1.0 ? .orange : .green)
                             Spacer()
@@ -520,21 +591,16 @@ struct SleepDetailView: View {
                                 .font(Theme.Typography.roundedFont(size: 13, weight: .semibold))
                                 .foregroundColor(.white.opacity(0.5))
                         }
-                        
                         Text(debt > 1.0 ? "Your sleep debt is accumulating. Aim to go to bed earlier tonight." : "Your sleep debt is healthy. Continue your regular schedule.")
                             .font(Theme.Typography.roundedFont(size: 12, weight: .regular))
                             .foregroundColor(.white.opacity(0.6))
                     }
                     .glassCard()
                     .padding(.horizontal)
-                    
-                    // Nocturnal Heart Rate Dipping & Sleep Scoring formula card
+
+                    // Algorithm Details
                     VStack(alignment: .leading, spacing: 14) {
-                        Button(action: {
-                            withAnimation(.spring()) {
-                                showAlgorithmDetails.toggle()
-                            }
-                        }) {
+                        Button(action: { withAnimation(.spring()) { showAlgorithmDetails.toggle() } }) {
                             HStack {
                                 Text("Sleep Scoring & HR Dipping")
                                     .font(Theme.Typography.roundedFont(size: 15, weight: .bold))
@@ -544,40 +610,30 @@ struct SleepDetailView: View {
                                     .foregroundColor(.white.opacity(0.6))
                             }
                         }
-                        
+
                         if showAlgorithmDetails {
                             Divider().background(Color.white.opacity(0.08))
-                            
                             VStack(alignment: .leading, spacing: 12) {
                                 Text("100-POINT QUALITY ALGORITHM")
                                     .font(Theme.Typography.roundedFont(size: 11, weight: .bold))
                                     .foregroundColor(Theme.Colors.sleepLight)
-                                
                                 Text("Point Composition:")
                                     .font(Theme.Typography.roundedFont(size: 12, weight: .bold))
                                     .foregroundColor(.white)
-                                
                                 Text("- **Duration (40 pts)**: Ratio of sleep duration vs baseline needed.\n- **Deep Sleep (30 pts)**: Ratio of actual deep sleep minutes vs 90-minute target.\n- **REM Sleep (20 pts)**: Ratio of actual REM minutes vs 90-minute target.\n- **Heart Rate Dipping (10 pts)**: Presence of nocturnal heart rate dipping.")
                                     .font(Theme.Typography.roundedFont(size: 12, weight: .regular))
                                     .foregroundColor(.white.opacity(0.6))
                                     .lineSpacing(4)
-                                
                                 Text("Nocturnal Heart Rate Dipping:")
                                     .font(Theme.Typography.roundedFont(size: 12, weight: .bold))
                                     .foregroundColor(.white)
-                                
-                                Text("Formula:")
-                                    .font(Theme.Typography.roundedFont(size: 12, weight: .bold))
-                                    .foregroundColor(.white.opacity(0.8))
-                                
                                 Text("Dip % = ((DayAvgHR - NightAvgHR) / DayAvgHR) * 100")
                                     .font(.system(.footnote, design: .monospaced))
                                     .foregroundColor(.white.opacity(0.9))
                                     .padding(8)
                                     .background(Color.black.opacity(0.2))
                                     .cornerRadius(6)
-                                
-                                Text("A healthy cardiovascular system shows an autonomic shift during sleep. Heart rate should dip by **10% to 20%** compared to your daytime average. Dipping less than 10% (non-dipper) correlates with increased sympathetic tone and incomplete physical recovery.")
+                                Text("A healthy cardiovascular system shows an autonomic shift during sleep. Heart rate should dip by **10% to 20%** compared to your daytime average.")
                                     .font(Theme.Typography.roundedFont(size: 12, weight: .regular))
                                     .foregroundColor(.white.opacity(0.6))
                                     .lineSpacing(4)
@@ -592,5 +648,34 @@ struct SleepDetailView: View {
         }
         .navigationTitle("Sleep Analysis")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    // MARK: - Helpers
+    private var noDataPlaceholder: some View {
+        HStack {
+            Spacer()
+            VStack(spacing: 6) {
+                Image(systemName: "moon.zzz")
+                    .font(Theme.Typography.roundedFont(size: 24, weight: .regular))
+                    .foregroundColor(.white.opacity(0.2))
+                Text("No sleep data for this period")
+                    .font(Theme.Typography.roundedFont(size: 12, weight: .medium))
+                    .foregroundColor(.white.opacity(0.3))
+            }
+            .padding(.vertical, 30)
+            Spacer()
+        }
+    }
+
+    private func formatDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM d"
+        return formatter.string(from: date)
+    }
+
+    private func formatSleepHours(_ hours: Double) -> String {
+        let h = Int(hours)
+        let m = Int((hours - Double(h)) * 60)
+        return h > 0 ? "\(h)h \(m)m" : "\(m)m"
     }
 }

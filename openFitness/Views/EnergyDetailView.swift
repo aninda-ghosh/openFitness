@@ -7,6 +7,7 @@ struct EnergyDetailView: View {
     
     @State private var selectedTimeframe: Timeframe = .day
     @State private var showInfoSheet = false
+    @State private var baseDate: Date = Calendar.current.startOfDay(for: Date())
     
     private var displayEnergy: Int {
         if selectedTimeframe == .day {
@@ -32,7 +33,7 @@ struct EnergyDetailView: View {
                         presentationMode.wrappedValue.dismiss()
                     }) {
                         Image(systemName: "chevron.left")
-                            .font(.system(size: 20, weight: .semibold))
+                            .font(Theme.Typography.titleSM)
                             .foregroundColor(.white)
                             .frame(width: 44, height: 44)
                             .background(Color.white.opacity(0.04))
@@ -51,7 +52,7 @@ struct EnergyDetailView: View {
                         showInfoSheet.toggle()
                     }) {
                         Image(systemName: "info.circle")
-                            .font(.system(size: 20, weight: .semibold))
+                            .font(Theme.Typography.titleSM)
                             .foregroundColor(.white)
                             .frame(width: 44, height: 44)
                             .background(Color.white.opacity(0.04))
@@ -70,7 +71,7 @@ struct EnergyDetailView: View {
                             HStack(alignment: .center, spacing: 16) {
                                 HStack(spacing: 8) {
                                     Image(systemName: "battery.100.bolt")
-                                        .font(.system(size: 28, weight: .bold))
+                                        .font(Theme.Typography.titleLG)
                                         .foregroundColor(Theme.Colors.sleepDeep)
                                     
                                     Text("\(displayEnergy)%")
@@ -115,7 +116,7 @@ struct EnergyDetailView: View {
                                 HStack(spacing: 4) {
                                     Image(systemName: "battery.50")
                                         .foregroundColor(.white.opacity(0.6))
-                                        .font(.system(size: 11))
+                                        .font(Theme.Typography.caption)
                                     Text(selectedTimeframe == .day ? "Had: \(hkManager.energyBankStart)%" : "Had")
                                         .font(Theme.Typography.roundedFont(size: 11, weight: .bold))
                                         .foregroundColor(.white)
@@ -135,7 +136,7 @@ struct EnergyDetailView: View {
                                 HStack(spacing: 4) {
                                     Image(systemName: "arrow.up.circle.fill")
                                         .foregroundColor(Theme.Colors.sleepDeep)
-                                        .font(.system(size: 11))
+                                        .font(Theme.Typography.caption)
                                     Text(selectedTimeframe == .day ? "Charged: +\(hkManager.energyBankCharged)%" : "Charged")
                                         .font(Theme.Typography.roundedFont(size: 11, weight: .bold))
                                         .foregroundColor(.white)
@@ -155,7 +156,7 @@ struct EnergyDetailView: View {
                                 HStack(spacing: 4) {
                                     Image(systemName: "arrow.down.circle.fill")
                                         .foregroundColor(Color(red: 0.96, green: 0.45, blue: 0.41))
-                                        .font(.system(size: 11))
+                                        .font(Theme.Typography.caption)
                                     Text(selectedTimeframe == .day ? "Drained: -\(hkManager.energyBankDrained)%" : "Drained")
                                         .font(Theme.Typography.roundedFont(size: 11, weight: .bold))
                                         .foregroundColor(.white)
@@ -177,6 +178,17 @@ struct EnergyDetailView: View {
                         // Custom Timeframe Picker
                         CustomSegmentedPicker(selection: $selectedTimeframe)
                             .padding(.horizontal)
+                            .onChange(of: selectedTimeframe) { _, _ in
+                                baseDate = Calendar.current.startOfDay(for: Date())
+                            }
+
+                        if selectedTimeframe != .day {
+                            PeriodNavigationView(
+                                timeframe: selectedTimeframe,
+                                baseDate: $baseDate,
+                                accentColor: Theme.Colors.sleepDeep
+                            )
+                        }
                         
                         // Chart Card
                         VStack(alignment: .leading, spacing: 16) {
@@ -229,7 +241,7 @@ struct EnergyDetailView: View {
                             HStack(alignment: .top, spacing: 10) {
                                 Image(systemName: "lightbulb.fill")
                                     .foregroundColor(Theme.Colors.sleepDeep)
-                                    .font(.system(size: 16))
+                                    .font(Theme.Typography.bodyLG)
                                     .padding(.top, 2)
                                 
                                 Text(hkManager.energyBankDescription.isEmpty ? 
@@ -253,7 +265,7 @@ struct EnergyDetailView: View {
                             // Sleep (Charge)
                             HStack(spacing: 12) {
                                 Image(systemName: "bed.double.fill")
-                                    .font(.system(size: 18))
+                                    .font(Theme.Typography.titleSM)
                                     .foregroundColor(Theme.Colors.sleepDeep)
                                     .frame(width: 38, height: 38)
                                     .background(Theme.Colors.sleepDeep.opacity(0.1))
@@ -278,7 +290,7 @@ struct EnergyDetailView: View {
                             // Stress (Drain)
                             HStack(spacing: 12) {
                                 Image(systemName: "waveform.path.ecg")
-                                    .font(.system(size: 18))
+                                    .font(Theme.Typography.titleSM)
                                     .foregroundColor(.orange)
                                     .frame(width: 38, height: 38)
                                     .background(Color.orange.opacity(0.1))
@@ -304,7 +316,7 @@ struct EnergyDetailView: View {
                             // Active Calories (Drain)
                             HStack(spacing: 12) {
                                 Image(systemName: "flame.fill")
-                                    .font(.system(size: 18))
+                                    .font(Theme.Typography.titleSM)
                                     .foregroundColor(Color(red: 0.96, green: 0.45, blue: 0.41))
                                     .frame(width: 38, height: 38)
                                     .background(Color(red: 0.96, green: 0.45, blue: 0.41).opacity(0.1))
@@ -346,7 +358,8 @@ struct EnergyDetailView: View {
         let now = Date()
         
         var wakeUpTime = calendar.date(bySettingHour: 7, minute: 0, second: 0, of: now) ?? now
-        if let latestSleepStage = hkManager.todaySleepStages.sorted(by: { $0.endDate < $1.endDate }).last {
+        if !hkManager.isSleepDataStale,
+           let latestSleepStage = hkManager.todaySleepStages.sorted(by: { $0.endDate < $1.endDate }).last {
             wakeUpTime = latestSleepStage.endDate
         }
         
@@ -456,35 +469,54 @@ struct EnergyDetailView: View {
     // Historical picker data selector
     private func getHistoricalEnergyData() -> TimeframeData {
         let calendar = Calendar.current
+        guard selectedTimeframe != .day else { return getHourlyEnergyData() }
+
         let metrics: [DailyMetrics]
         switch selectedTimeframe {
         case .day:
             return getHourlyEnergyData()
+        case .threeDays:
+            let start = calendar.date(byAdding: .day, value: -2, to: baseDate)!
+            metrics = hkManager.historicalMetrics.filter { $0.date >= start && $0.date <= baseDate }
         case .week:
-            metrics = Array(hkManager.historicalMetrics.suffix(7))
+            let start = calendar.date(byAdding: .day, value: -6, to: baseDate)!
+            metrics = hkManager.historicalMetrics.filter { $0.date >= start && $0.date <= baseDate }
         case .month:
-            metrics = Array(hkManager.historicalMetrics.suffix(30))
+            let start = calendar.date(byAdding: .day, value: -29, to: baseDate)!
+            metrics = hkManager.historicalMetrics.filter { $0.date >= start && $0.date <= baseDate }
+        case .sixMonths:
+            let start = calendar.date(byAdding: .day, value: -179, to: baseDate)!
+            metrics = hkManager.historicalMetrics.filter { $0.date >= start && $0.date <= baseDate }
         case .year:
-            metrics = hkManager.historicalMetrics
+            let start = calendar.date(byAdding: .day, value: -364, to: baseDate)!
+            metrics = hkManager.historicalMetrics.filter { $0.date >= start && $0.date <= baseDate }
         }
-        
-        let points = metrics.map { m -> Double in
-            let base = Double(m.recoveryScore + m.sleepScore) / 2.0
-            let depletion = m.strainScore * 2.2
-            return max(5.0, min(98.0, base - depletion))
+
+        if metrics.isEmpty {
+            return TimeframeData(points: [], labels: [], average: 0)
         }
-        
+
         let formatter = DateFormatter()
-        let labels: [String]
         switch selectedTimeframe {
-        case .day:
-            return getHourlyEnergyData()
         case .week:
+            let points = metrics.map { m -> Double in
+                let base = Double(m.recoveryScore + m.sleepScore) / 2.0
+                return max(5.0, min(98.0, base - m.strainScore * 2.2))
+            }
             formatter.dateFormat = "E"
-            labels = metrics.map { formatter.string(from: $0.date) }
+            let labels = metrics.map { formatter.string(from: $0.date) }
+            let average = points.reduce(0, +) / Double(points.count)
+            return TimeframeData(points: points, labels: labels, average: average)
+
         case .month:
-            labels = ["W1", "W2", "W3", "W4"]
-        case .year:
+            let points = metrics.map { m -> Double in
+                let base = Double(m.recoveryScore + m.sleepScore) / 2.0
+                return max(5.0, min(98.0, base - m.strainScore * 2.2))
+            }
+            let average = points.reduce(0, +) / Double(points.count)
+            return TimeframeData(points: points, labels: ["W1","W2","W3","W4"], average: average)
+
+        default: // .year
             formatter.dateFormat = "MMM"
             var monthlySums: [Int: Double] = [:]
             var monthlyCounts: [Int: Double] = [:]
@@ -492,27 +524,17 @@ struct EnergyDetailView: View {
             for m in metrics {
                 let month = calendar.component(.month, from: m.date)
                 let base = Double(m.recoveryScore + m.sleepScore) / 2.0
-                let depletion = m.strainScore * 2.2
-                let val = max(5.0, min(98.0, base - depletion))
-                monthlySums[month, default: 0.0] += val
-                monthlyCounts[month, default: 0.0] += 1.0
+                let val = max(5.0, min(98.0, base - m.strainScore * 2.2))
+                monthlySums[month, default: 0] += val
+                monthlyCounts[month, default: 0] += 1
                 monthlyDates[month] = m.date
             }
-            let sortedMonths = monthlyDates.keys.sorted { m1, m2 in
-                monthlyDates[m1]! < monthlyDates[m2]!
-            }
-            let pointsYear = sortedMonths.map { month in
-                (monthlySums[month] ?? 0.0) / (monthlyCounts[month] ?? 1.0)
-            }
-            let labelsYear = sortedMonths.map { month in
-                formatter.string(from: monthlyDates[month]!)
-            }
-            let averageYear = pointsYear.isEmpty ? 0.0 : pointsYear.reduce(0, +) / Double(pointsYear.count)
-            return TimeframeData(points: pointsYear, labels: labelsYear, average: averageYear)
+            let sorted = monthlyDates.keys.sorted { monthlyDates[$0]! < monthlyDates[$1]! }
+            let pts = sorted.map { (monthlySums[$0] ?? 0) / (monthlyCounts[$0] ?? 1) }
+            let lbls = sorted.map { formatter.string(from: monthlyDates[$0]!) }
+            let avg = pts.isEmpty ? 0 : pts.reduce(0, +) / Double(pts.count)
+            return TimeframeData(points: pts, labels: lbls, average: avg)
         }
-        
-        let average = points.isEmpty ? 0.0 : points.reduce(0, +) / Double(points.count)
-        return TimeframeData(points: points, labels: labels, average: average)
     }
 }
 
@@ -534,7 +556,7 @@ struct EnergyBankInfoSheet: View {
                         presentationMode.wrappedValue.dismiss()
                     }) {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 24))
+                            .font(Theme.Typography.roundedFont(size: 24, weight: .bold))
                             .foregroundColor(.white.opacity(0.3))
                     }
                 }

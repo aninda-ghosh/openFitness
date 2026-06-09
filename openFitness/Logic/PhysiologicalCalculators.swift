@@ -197,9 +197,47 @@ struct PhysiologicalCalculators {
         return max(0, min(100, Int(round(totalScore))))
     }
     
+    // MARK: - Activity Threshold Persistence
+    struct ActivityThresholds {
+        var dailyStepsGoal: Int        // default 10000
+        var dailyCalorieGoal: Double   // default 0 → auto from profile weight
+        var optimalStrain: Double      // default 11.0
+    }
+
+    static func getActivityThresholds() -> ActivityThresholds {
+        let steps = UserDefaults.standard.integer(forKey: "activityThresholdSteps")
+        let cals = UserDefaults.standard.double(forKey: "activityThresholdCalories")
+        let strain = UserDefaults.standard.double(forKey: "activityThresholdStrain")
+        return ActivityThresholds(
+            dailyStepsGoal: steps > 0 ? steps : 10_000,
+            dailyCalorieGoal: cals,
+            optimalStrain: strain > 0 ? strain : 11.0
+        )
+    }
+
+    static func saveActivityThresholds(_ t: ActivityThresholds) {
+        UserDefaults.standard.set(t.dailyStepsGoal, forKey: "activityThresholdSteps")
+        UserDefaults.standard.set(t.dailyCalorieGoal, forKey: "activityThresholdCalories")
+        UserDefaults.standard.set(t.optimalStrain, forKey: "activityThresholdStrain")
+        UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: "activityThresholdChangedAt")
+    }
+
+    static var isRecalibrating: Bool {
+        let ts = UserDefaults.standard.double(forKey: "activityThresholdChangedAt")
+        guard ts > 0 else { return false }
+        let changedAt = Date(timeIntervalSince1970: ts)
+        return Date().timeIntervalSince(changedAt) < 7 * 86400
+    }
+
+    static var recalibrationDaysRemaining: Int {
+        let ts = UserDefaults.standard.double(forKey: "activityThresholdChangedAt")
+        guard ts > 0 else { return 0 }
+        let changedAt = Date(timeIntervalSince1970: ts)
+        let elapsed = Date().timeIntervalSince(changedAt)
+        return max(0, 7 - Int(elapsed / 86400))
+    }
+
     // MARK: - Activeness Score (0% - 100%)
-    /// Computes a composite daily Activeness Score from six physiological and activity sub-scores.
-    /// Only meaningful once calibration is complete (21+ days of HRV/RHR baseline data).
     static func calculateActivenessScore(
         profile: UserProfile,
         recovery: Int,
@@ -210,49 +248,38 @@ struct PhysiologicalCalculators {
         todayHRV: Double,
         baselineHRVMean: Double,
         baselineHRVStdDev: Double,
-        stressAverage: Int
+        stressAverage: Int,
+        thresholds: ActivityThresholds? = nil
     ) -> Int {
-        // 1. Recovery sub-score (25% weight) — direct mapping
+        let t = thresholds ?? getActivityThresholds()
+
         let sRecovery = Double(recovery) / 100.0
-        
-        // 2. Strain Balance sub-score (20% weight) — bell curve centered at optimal ~11
-        // Rewards moderate training, penalizes both under-training and overtraining
-        let strainOptimal = 11.0
+
         let strainSpread = 4.0
-        let sStrain = exp(-0.5 * pow((strain - strainOptimal) / strainSpread, 2))
-        
-        // 3. Sleep Quality sub-score (20% weight) — direct mapping
+        let sStrain = exp(-0.5 * pow((strain - t.optimalStrain) / strainSpread, 2))
+
         let sSleep = Double(sleepScore) / 100.0
-        
-        // 4. Activity sub-score (15% weight) — blend of steps and calories
-        let stepsNorm = min(1.0, Double(steps) / 10000.0)
-        
-        // Calorie target normalized dynamically based on weight instead of flat 600
-        let calorieTarget = max(300.0, profile.weightKg * 8.5)
+
+        let stepsNorm = min(1.0, Double(steps) / Double(t.dailyStepsGoal))
+        let calorieTarget: Double = t.dailyCalorieGoal > 0 ? t.dailyCalorieGoal : max(300.0, profile.weightKg * 8.5)
         let calsNorm = min(1.0, activeCalories / calorieTarget)
-        
         let sActivity = 0.6 * stepsNorm + 0.4 * calsNorm
-        
-        // 5. HRV Trend sub-score (10% weight) — sigmoid-mapped z-score
-        // Higher HRV relative to personal baseline = better
+
         let logHRV = todayHRV > 0 ? log(todayHRV) : baselineHRVMean
         let stdDev = max(baselineHRVStdDev, 0.05)
         let zHRV = (logHRV - baselineHRVMean) / stdDev
-        let sHRV = 1.0 / (1.0 + exp(-1.5 * zHRV)) // Sigmoid: maps z-score to 0–1
-        
-        // 6. Stress inverse sub-score (10% weight) — lower stress = higher score
+        let sHRV = 1.0 / (1.0 + exp(-1.5 * zHRV))
+
         let sStress = 1.0 - (Double(stressAverage) / 100.0)
-        
-        // Weighted sum
+
         let weighted = (0.25 * sRecovery) +
                        (0.20 * sStrain) +
                        (0.20 * sSleep) +
                        (0.15 * sActivity) +
                        (0.10 * sHRV) +
                        (0.10 * sStress)
-        
-        let score = weighted * 100.0
-        return max(0, min(100, Int(round(score))))
+
+        return max(0, min(100, Int(round(weighted * 100.0))))
     }
     
     // MARK: - Dynamic Energy Bank Score (0% - 100%)

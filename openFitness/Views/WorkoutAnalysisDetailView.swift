@@ -14,10 +14,14 @@ struct WorkoutAnalysisDetailView: View {
         switch selectedTimeframe {
         case .day:
             startDate = calendar.startOfDay(for: now)
+        case .threeDays:
+            startDate = calendar.date(byAdding: .day, value: -3, to: now)!
         case .week:
             startDate = calendar.date(byAdding: .day, value: -7, to: now)!
         case .month:
             startDate = calendar.date(byAdding: .day, value: -30, to: now)!
+        case .sixMonths:
+            startDate = calendar.date(byAdding: .day, value: -180, to: now)!
         case .year:
             startDate = calendar.date(byAdding: .year, value: -1, to: now)!
         }
@@ -86,13 +90,11 @@ struct WorkoutAnalysisDetailView: View {
                 cumulativeStrain.append(runningTotal)
             }
             
-            // If cumulative strain is 0, add a small mock visual line if they had any strain today
             let finalVal = cumulativeStrain.last ?? 0.0
             if finalVal == 0 {
-                let mockPoints = [0.0, 0.0, 0.0, 1.2, 3.5, 3.5, 5.0, 5.0]
-                return TimeframeData(points: mockPoints, labels: labels, average: 2.3)
+                return TimeframeData(points: [], labels: labels, average: 0)
             }
-            
+
             return TimeframeData(points: cumulativeStrain, labels: labels, average: finalVal)
             
         case .week:
@@ -130,28 +132,74 @@ struct WorkoutAnalysisDetailView: View {
             let average = points.isEmpty ? 0.0 : points.reduce(0, +) / Double(points.count)
             return TimeframeData(points: points, labels: labels, average: average)
             
+        case .threeDays:
+            var points: [Double] = []
+            var labels: [String] = []
+            let formatter = DateFormatter()
+            formatter.dateFormat = "E"
+            for i in (0..<3).reversed() {
+                let date = calendar.date(byAdding: .day, value: -i, to: now)!
+                let dayStart = calendar.startOfDay(for: date)
+                let dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart)!
+                let workoutsOnDay = filteredWorkouts.filter { $0.date >= dayStart && $0.date < dayEnd }
+                let strainOnDay = workoutsOnDay.reduce(0.0) { $0 + $1.strainContribution }
+                points.append(strainOnDay)
+                labels.append(formatter.string(from: date))
+            }
+            let avg3d = points.reduce(0.0, +) / Double(points.count)
+            return TimeframeData(points: points, labels: labels, average: avg3d)
+
+        case .sixMonths:
+            var monthlySums6M: [Int: Double] = [:]
+            var monthlyDates6M: [Int: Date] = [:]
+
+            for i in (0..<6).reversed() {
+                let date = calendar.date(byAdding: .month, value: -i, to: now)!
+                let monthVal = calendar.component(.month, from: date)
+                monthlySums6M[monthVal] = 0.0
+                monthlyDates6M[monthVal] = date
+            }
+
+            for w in filteredWorkouts {
+                let monthVal = calendar.component(.month, from: w.date)
+                if monthlySums6M[monthVal] != nil {
+                    monthlySums6M[monthVal]! += w.strainContribution
+                }
+            }
+
+            let sortedMonths6M = monthlyDates6M.keys.sorted { monthlyDates6M[$0]! < monthlyDates6M[$1]! }
+
+            let points6M = sortedMonths6M.map { monthlySums6M[$0] ?? 0.0 }
+            let labels6M = sortedMonths6M.map { month in
+                let fmt = DateFormatter()
+                fmt.dateFormat = "MMM"
+                return fmt.string(from: monthlyDates6M[month]!)
+            }
+            let average6M = points6M.isEmpty ? 0.0 : points6M.reduce(0, +) / Double(points6M.count)
+            return TimeframeData(points: points6M, labels: labels6M, average: average6M)
+
         case .year:
             var monthlySums: [Int: Double] = [:]
             var monthlyDates: [Int: Date] = [:]
-            
+
             for i in (0..<12).reversed() {
                 let date = calendar.date(byAdding: .month, value: -i, to: now)!
                 let monthVal = calendar.component(.month, from: date)
                 monthlySums[monthVal] = 0.0
                 monthlyDates[monthVal] = date
             }
-            
+
             for w in filteredWorkouts {
                 let monthVal = calendar.component(.month, from: w.date)
                 if monthlySums[monthVal] != nil {
                     monthlySums[monthVal]! += w.strainContribution
                 }
             }
-            
+
             let sortedMonths = monthlyDates.keys.sorted { m1, m2 in
                 monthlyDates[m1]! < monthlyDates[m2]!
             }
-            
+
             let points = sortedMonths.map { monthlySums[$0] ?? 0.0 }
             let labels = sortedMonths.map { month in
                 let formatter = DateFormatter()
@@ -188,7 +236,7 @@ struct WorkoutAnalysisDetailView: View {
                         presentationMode.wrappedValue.dismiss()
                     }) {
                         Image(systemName: "chevron.left")
-                            .font(.system(size: 20, weight: .semibold))
+                            .font(Theme.Typography.titleSM)
                             .foregroundColor(.white)
                             .frame(width: 44, height: 44)
                             .background(Color.white.opacity(0.04))
@@ -214,7 +262,7 @@ struct WorkoutAnalysisDetailView: View {
                         
                         CustomSegmentedPicker(selection: $selectedTimeframe)
                             .padding(.top, 10)
-                            .onChange(of: selectedTimeframe) { newValue in
+                            .onChange(of: selectedTimeframe) { _, newValue in
                                 hkManager.fetchWorkoutsForTimeframe(timeframe: newValue)
                             }
                         
@@ -385,8 +433,8 @@ struct DetailStatView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title)
-                .font(Theme.Typography.roundedFont(size: 9, weight: .bold))
-                .foregroundColor(.white.opacity(0.4))
+                .font(Theme.Typography.tick)
+                .foregroundColor(.white.opacity(0.45))
             Text(value)
                 .font(Theme.Typography.roundedFont(size: 18, weight: .bold))
                 .foregroundColor(color)

@@ -157,7 +157,7 @@ struct WorkoutDetailView: View {
                                 // 1 Min recovery drop
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text("1-MIN DROP")
-                                        .font(Theme.Typography.roundedFont(size: 9, weight: .bold))
+                                        .font(Theme.Typography.tick)
                                         .foregroundColor(.white.opacity(0.4))
                                     
                                     HStack(alignment: .firstTextBaseline, spacing: 2) {
@@ -171,7 +171,7 @@ struct WorkoutDetailView: View {
                                     
                                     // Rating pill
                                     Text(details.hrr1Min >= 30 ? "Outstanding" : (details.hrr1Min >= 20 ? "Good" : (details.hrr1Min >= 12 ? "Normal" : "Low")))
-                                        .font(Theme.Typography.roundedFont(size: 9, weight: .bold))
+                                        .font(Theme.Typography.tick)
                                         .foregroundColor(details.hrr1Min >= 12 ? Theme.Colors.recoveryHigh : Theme.Colors.recoveryLow)
                                         .padding(.horizontal, 6)
                                         .padding(.vertical, 2)
@@ -187,7 +187,7 @@ struct WorkoutDetailView: View {
                                 // 2 Min recovery drop
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text("2-MIN DROP")
-                                        .font(Theme.Typography.roundedFont(size: 9, weight: .bold))
+                                        .font(Theme.Typography.tick)
                                         .foregroundColor(.white.opacity(0.4))
                                     
                                     HStack(alignment: .firstTextBaseline, spacing: 2) {
@@ -200,7 +200,7 @@ struct WorkoutDetailView: View {
                                     }
                                     
                                     Text(details.hrr2Min >= 45 ? "Outstanding" : (details.hrr2Min >= 30 ? "Good" : (details.hrr2Min >= 22 ? "Normal" : "Low")))
-                                        .font(Theme.Typography.roundedFont(size: 9, weight: .bold))
+                                        .font(Theme.Typography.tick)
                                         .foregroundColor(details.hrr2Min >= 22 ? Theme.Colors.sleepDeep : Theme.Colors.recoveryLow)
                                         .padding(.horizontal, 6)
                                         .padding(.vertical, 2)
@@ -357,7 +357,7 @@ struct WorkoutDetailTile: View {
                     .foregroundColor(color)
                     .font(.footnote)
                 Text(title)
-                    .font(Theme.Typography.roundedFont(size: 9, weight: .bold))
+                    .font(Theme.Typography.tick)
                     .foregroundColor(.white.opacity(0.4))
             }
             Text(value)
@@ -591,7 +591,7 @@ struct WorkoutHeartRateGraph: View {
                         .stroke(themeColor.opacity(0.35), style: StrokeStyle(lineWidth: 1.5, dash: [5, 5]))
                         
                         Text("AVG \(Int(averageHR)) BPM")
-                            .font(Theme.Typography.roundedFont(size: 8, weight: .bold))
+                            .font(Theme.Typography.tick)
                             .foregroundColor(themeColor.opacity(0.8))
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
@@ -603,7 +603,7 @@ struct WorkoutHeartRateGraph: View {
                     
                     // Recovery Phase Label at the top right of division
                     Text("RECOVERY")
-                        .font(Theme.Typography.roundedFont(size: 8, weight: .bold))
+                        .font(Theme.Typography.tick)
                         .foregroundColor(recoveryColor.opacity(0.7))
                         .padding(.horizontal, 4)
                         .padding(.vertical, 2)
@@ -622,7 +622,7 @@ struct WorkoutHeartRateGraph: View {
                             .position(x: x, y: y)
                         
                         Text("MAX \(Int(maxHR))")
-                            .font(Theme.Typography.roundedFont(size: 8, weight: .bold))
+                            .font(Theme.Typography.tick)
                             .foregroundColor(.white)
                             .padding(.horizontal, 4)
                             .padding(.vertical, 2)
@@ -644,7 +644,7 @@ struct WorkoutHeartRateGraph: View {
                             .position(x: x, y: y)
                         
                         Text("REST \(Int(finalRecovery))")
-                            .font(Theme.Typography.roundedFont(size: 8, weight: .bold))
+                            .font(Theme.Typography.tick)
                             .foregroundColor(.white)
                             .padding(.horizontal, 4)
                             .padding(.vertical, 2)

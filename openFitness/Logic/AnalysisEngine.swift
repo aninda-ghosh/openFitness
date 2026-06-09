@@ -30,6 +30,10 @@ struct CalculatedMetricsState: Sendable {
     let todayRemMinutes: Double
     let todaySleepStages: [AnalysisSleepStageSample]
     
+    // Sleep Fallback Data
+    let sleepDataDate: Date
+    let isSleepDataStale: Bool
+    
     // Vitals
     let vitalsRespiratoryRate: Double
     let vitalsOxygenSaturation: Double
@@ -77,11 +81,31 @@ final class AnalysisEngine: Sendable {
         let startOfDay = calendar.startOfDay(for: now)
         let todayStartStr = formatDateString(now)
         
-        // 1. Process Sleep Samples (Filtering by wake-up day to match the date)
-        let todaySleepSamples = sleepSamples.filter { sample in
+        // Group all sleep samples by wake-up day
+        let sleepSamplesByWakeUp = Dictionary(grouping: sleepSamples) { sample -> String in
             let hour = calendar.component(.hour, from: sample.endDate)
             let sleepDay = hour < 12 ? sample.endDate : (calendar.date(byAdding: .day, value: 1, to: sample.endDate) ?? sample.endDate)
-            return calendar.isDate(sleepDay, inSameDayAs: now)
+            return formatDateString(sleepDay)
+        }
+        
+        // 1. Process Sleep Samples (Filtering by wake-up day to match the date)
+        var sleepSamplesToUse = sleepSamplesByWakeUp[todayStartStr] ?? []
+        var sleepDataDate = now
+        var isSleepDataStale = false
+        
+        if sleepSamplesToUse.isEmpty {
+            let sortedSleepDays = sleepSamplesByWakeUp.keys.filter { $0 < todayStartStr }.sorted()
+            if let latestSleepDayStr = sortedSleepDays.last,
+               let samples = sleepSamplesByWakeUp[latestSleepDayStr],
+               !samples.isEmpty {
+                sleepSamplesToUse = samples
+                let formatter = DateFormatter()
+                formatter.dateFormat = "yyyy-MM-dd"
+                if let date = formatter.date(from: latestSleepDayStr) {
+                    sleepDataDate = date
+                    isSleepDataStale = true
+                }
+            }
         }
         
         var totalAsleepTime: TimeInterval = 0
@@ -89,7 +113,7 @@ final class AnalysisEngine: Sendable {
         var remTime: TimeInterval = 0
         var stageSamples: [AnalysisSleepStageSample] = []
         
-        for sample in todaySleepSamples {
+        for sample in sleepSamplesToUse {
             let duration = sample.endDate.timeIntervalSince(sample.startDate)
             let val = Int(sample.value)
             
@@ -151,11 +175,6 @@ final class AnalysisEngine: Sendable {
         let yesterdayRemMinutes = yesterdayRem / 60.0
         
         // 2. Process Sleep Windows and HRV Baseline
-        let sleepSamplesByWakeUp = Dictionary(grouping: sleepSamples) { sample -> String in
-            let hour = calendar.component(.hour, from: sample.endDate)
-            let sleepDay = hour < 12 ? sample.endDate : (calendar.date(byAdding: .day, value: 1, to: sample.endDate) ?? sample.endDate)
-            return formatDateString(sleepDay)
-        }
         
         var baselineSleepWindows: [String: (start: Date, end: Date)] = [:]
         for (dateStr, samples) in sleepSamplesByWakeUp {
@@ -215,8 +234,7 @@ final class AnalysisEngine: Sendable {
         } else if !hrvSamplesToday.isEmpty {
             todayHRV = hrvSamplesToday.reduce(0.0) { $0 + $1.value } / Double(hrvSamplesToday.count)
         } else {
-            let defaultHRV = max(30.0, min(90.0, 100.0 - Double(profile.age)))
-            todayHRV = historicalHRV.last ?? defaultHRV
+            todayHRV = historicalHRV.last ?? 0.0
         }
         historicalHRV.append(todayHRV)
         
@@ -249,12 +267,7 @@ final class AnalysisEngine: Sendable {
         let todayActiveCalories = fuseSamplesUnionOfActivity(samples: todayCalorieSamples, now: now)
         
         let todayStepSamples = stepSamples.filter { calendar.isDate($0.startDate, inSameDayAs: now) }
-        var todaySteps = Int(round(fuseSamplesUnionOfActivity(samples: todayStepSamples, now: now)))
-        if todaySteps == 0 && todayActiveCalories > 0 {
-            todaySteps = Int(todayActiveCalories * 16.5)
-        } else if todaySteps == 0 {
-            todaySteps = 7842
-        }
+        let todaySteps = Int(round(fuseSamplesUnionOfActivity(samples: todayStepSamples, now: now)))
         
         // 5. Process Vitals (averages of last 48 hours)
         var respSum = 0.0, respCount = 0.0
@@ -400,7 +413,12 @@ final class AnalysisEngine: Sendable {
             hourlyCalories[hourDate] = totalVal
         }
         
-        let wakeUpTime = todaySleepStages.last?.endDate ?? calendar.date(bySettingHour: 7, minute: 0, second: 0, of: startOfDay)!
+        let wakeUpTime: Date
+        if isSleepDataStale {
+            wakeUpTime = calendar.date(bySettingHour: 7, minute: 0, second: 0, of: startOfDay)!
+        } else {
+            wakeUpTime = todaySleepStages.last?.endDate ?? calendar.date(bySettingHour: 7, minute: 0, second: 0, of: startOfDay)!
+        }
         
         let simulationStartIsYesterday = now < wakeUpTime
         let recoveryToUse = simulationStartIsYesterday ? yesterdayRecovery : todayRecovery
@@ -439,6 +457,8 @@ final class AnalysisEngine: Sendable {
             todayDeepMinutes: todayDeepMinutes,
             todayRemMinutes: todayRemMinutes,
             todaySleepStages: todaySleepStages,
+            sleepDataDate: sleepDataDate,
+            isSleepDataStale: isSleepDataStale,
             vitalsRespiratoryRate: vitalsRespiratoryRate,
             vitalsOxygenSaturation: vitalsOxygenSaturation,
             vitalsBodyTemperature: vitalsBodyTemperature,

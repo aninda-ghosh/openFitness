@@ -4,47 +4,60 @@ struct Theme {
     // MARK: - Color Palette
     struct Colors {
         // Backgrounds
-        static let background = Color(red: 0.08, green: 0.08, blue: 0.08) // Warm Charcoal
-        static let cardBackground = Color(red: 0.13, green: 0.13, blue: 0.13) // Solid dark gray
-        static let border = Color.white.opacity(0.03) // Deep gray stroke
-        
-        // Recovery (Vibrant Emerald / Gold / Rich Crimson)
-        static let recoveryHigh = Color(red: 0.06, green: 0.73, blue: 0.51)    // Emerald Green (#10B981)
-        static let recoveryMid = Color(red: 0.96, green: 0.62, blue: 0.04)     // Warm Gold (#F59E0B)
-        static let recoveryLow = Color(red: 0.94, green: 0.27, blue: 0.27)     // Rich Crimson (#EF4444)
-        
+        static let background    = Color(red: 0.02,  green: 0.02,  blue: 0.02)   // #050505 near-black
+        static let cardBackground = Color(red: 0.055, green: 0.055, blue: 0.055)  // #0E0E0E lifted black
+        static let border        = Color.white.opacity(0.05)
+
+        // Recovery
+        static let recoveryHigh  = Color(red: 0.063, green: 1.0,   blue: 0.667)  // #10FFAA Electric Mint
+        static let recoveryMid   = Color(red: 1.0,   green: 0.839, blue: 0.039)  // #FFD60A Pure Gold
+        static let recoveryLow   = Color(red: 1.0,   green: 0.216, blue: 0.373)  // #FF375F Apple Health Red
+
         // Strain
-        static let strainHigh = Color(red: 1.00, green: 0.34, blue: 0.13)      // Electric Coral Red-Orange (#FF5722)
-        static let strainLow = Color(red: 1.00, green: 0.54, blue: 0.40)      // Muted Coral (#FF8A65)
-        
+        static let strainHigh    = Color(red: 1.0,   green: 0.420, blue: 0.0)    // #FF6B00 Deep Orange
+        static let strainLow     = Color(red: 1.0,   green: 0.576, blue: 0.251)  // #FF9340 Muted Orange
+
         // Sleep
-        static let sleepDeep = Color(red: 0.39, green: 0.40, blue: 0.95)       // Deep Indigo (#6366F1)
-        static let sleepREM = Color(red: 0.55, green: 0.36, blue: 0.96)        // Electric Violet (#8B5CF6)
-        static let sleepLight = Color(red: 0.23, green: 0.51, blue: 0.96)      // Soothing Sky Blue (#3B82F6)
-        static let sleepAwake = Color(red: 0.98, green: 0.45, blue: 0.09)      // Sunset Orange (#F97316)
+        static let sleepDeep     = Color(red: 0.482, green: 0.380, blue: 1.0)    // #7B61FF Personal Purple
+        static let sleepREM      = Color(red: 0.749, green: 0.353, blue: 0.949)  // #BF5AF2 Vivid Violet
+        static let sleepLight    = Color(red: 0.039, green: 0.518, blue: 1.0)    // #0A84FF Apple Blue
+        static let sleepAwake    = Color(red: 1.0,   green: 0.624, blue: 0.039)  // #FF9F0A Warm Amber
     }
     
-    // MARK: - Typography (Rounded Sans-Serif)
+    // MARK: - Typography (SF Pro Rounded)
     struct Typography {
         static func roundedFont(size: CGFloat, weight: Font.Weight) -> Font {
-            return .system(size: size, weight: weight, design: .rounded)
+            .system(size: size, weight: weight, design: .rounded)
         }
-        
-        static func metricLabel(size: CGFloat = 48) -> Font {
-            return roundedFont(size: size, weight: .bold)
-        }
-        
-        static var cardTitle: Font {
-            return roundedFont(size: 14, weight: .semibold)
-        }
-        
-        static var bodyText: Font {
-            return roundedFont(size: 16, weight: .regular)
-        }
-        
-        static var valueLabel: Font {
-            return roundedFont(size: 20, weight: .bold)
-        }
+
+        // MARK: Display — hero numbers on rings and stat screens
+        static var displayXL: Font  { roundedFont(size: 56, weight: .black) }   // Primary score ring
+        static var display: Font    { roundedFont(size: 44, weight: .bold) }    // Main stat hero
+        static var displaySM: Font  { roundedFont(size: 34, weight: .bold) }    // Secondary stat hero
+
+        // MARK: Titles — section and card headings
+        static var titleLG: Font    { roundedFont(size: 28, weight: .bold) }    // Card headline number
+        static var title: Font      { roundedFont(size: 22, weight: .semibold) } // Supporting values
+        static var titleSM: Font    { roundedFont(size: 20, weight: .semibold) } // Card section heading
+
+        // MARK: Body — readable prose and callouts
+        static var bodyLG: Font     { roundedFont(size: 17, weight: .regular) } // Primary descriptive text
+        static var body: Font       { roundedFont(size: 15, weight: .regular) } // Standard body
+        static var callout: Font    { roundedFont(size: 13, weight: .medium) }  // Secondary stats, callouts
+
+        // MARK: Labels — UI chrome and card titles
+        static var label: Font      { roundedFont(size: 13, weight: .semibold) } // Card titles, segment tabs
+        static var labelSM: Font    { roundedFont(size: 12, weight: .medium) }   // Secondary labels
+
+        // MARK: Captions — chart elements, tags, ticks
+        static var caption: Font    { roundedFont(size: 11, weight: .semibold) } // Chart labels, pill tags
+        static var tick: Font       { roundedFont(size: 10, weight: .semibold) } // Axis ticks — minimum readable size
+
+        // MARK: Backward-compatible helpers
+        static func metricLabel(size: CGFloat = 44) -> Font { roundedFont(size: size, weight: .bold) }
+        static var cardTitle: Font  { label }
+        static var bodyText: Font   { bodyLG }
+        static var valueLabel: Font { title }
     }
 }
 
@@ -63,7 +76,7 @@ struct GlassmorphicModifier: ViewModifier {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .stroke(Theme.Colors.border, lineWidth: 1.0)
             )
-            .shadow(color: Color.black.opacity(0.25), radius: 6, x: 0, y: 3) // Flat shadow lift
+            .shadow(color: Color.black.opacity(0.5), radius: 8, x: 0, y: 4)
     }
 }
 

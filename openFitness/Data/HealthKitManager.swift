@@ -77,7 +77,10 @@ struct WorkoutDetailInfo {
 
 @MainActor
 class HealthKitManager: ObservableObject {
-    
+
+    // Singleton used by background tasks and AppDelegate
+    static let shared = HealthKitManager()
+
     // MARK: - Published Properties for SwiftUI Views
     @Published var isAuthorized = false
     
@@ -101,6 +104,12 @@ class HealthKitManager: ObservableObject {
     @Published var todayRespiratoryRate: Double = 0.0
     @Published var todayOxygenSaturation: Double = 0.0
     @Published var todayBodyTemperature: Double = 0.0
+
+    // Body Composition & Fitness
+    @Published var todayBodyFatPercentage: Double = 0.0
+    @Published var todayVO2Max: Double = 0.0
+    @Published var todayBMI: Double = 0.0
+    @Published var todayWeight: Double = 0.0
     
     // Stress & Energy
     @Published var todayStressAverage: Int = 0
@@ -123,6 +132,8 @@ class HealthKitManager: ObservableObject {
     @Published var isSyncing: Bool = false
     
     @Published var todaySleepStages: [SleepStageSample] = []
+    @Published var sleepDataDate: Date = Date()
+    @Published var isSleepDataStale: Bool = false
     
     @Published var recentWorkouts: [WorkoutItem] = []
     @Published var recentECGSamples: [RawECG] = []
@@ -286,10 +297,14 @@ class HealthKitManager: ObservableObject {
         switch timeframe {
         case .day:
             startDate = calendar.startOfDay(for: now)
+        case .threeDays:
+            startDate = calendar.date(byAdding: .day, value: -3, to: now)!
         case .week:
             startDate = calendar.date(byAdding: .day, value: -7, to: now)!
         case .month:
             startDate = calendar.date(byAdding: .day, value: -30, to: now)!
+        case .sixMonths:
+            startDate = calendar.date(byAdding: .day, value: -180, to: now)!
         case .year:
             startDate = calendar.date(byAdding: .year, value: -1, to: now)!
         }
@@ -360,9 +375,12 @@ class HealthKitManager: ObservableObject {
             $0.respiratoryRate == nil || $0.oxygenSaturation == nil || $0.bodyTemperature == nil
         })
         
+        let yesterdayStr = formatDateString(calendar.date(byAdding: .day, value: -1, to: now)!)
+        let hasYesterday = cachedEntities.contains { $0.dateString == yesterdayStr }
+        
         if hasStaleEntities {
             LocalPersistenceManager.shared.clearDailyMetricsCache()
-        } else if cachedEntities.count >= 21 {
+        } else if cachedEntities.count >= 21 && hasYesterday {
             var metrics: [DailyMetrics] = []
             for entity in cachedEntities {
                 metrics.append(DailyMetrics(
@@ -370,19 +388,19 @@ class HealthKitManager: ObservableObject {
                     recoveryScore: entity.recovery,
                     strainScore: entity.strain,
                     sleepScore: entity.sleepScore,
-                    hrv: entity.hrv ?? 55.0,
-                    rhr: entity.rhr ?? 60.0,
-                    sleepDuration: entity.sleepDuration ?? (Double(entity.sleepScore) > 0 ? 7.5 : 0.0),
+                    hrv: entity.hrv ?? 0.0,
+                    rhr: entity.rhr ?? 0.0,
+                    sleepDuration: entity.sleepDuration ?? 0.0,
                     sleepNeeded: 8.0,
-                    deepMinutes: 90.0,
-                    remMinutes: 90.0,
+                    deepMinutes: entity.sleepDuration != nil ? 0.0 : 0.0,
+                    remMinutes: entity.sleepDuration != nil ? 0.0 : 0.0,
                     activeCalories: entity.activeCalories,
-                    averageHR: 72.0,
-                    maxHR: 135.0,
+                    averageHR: 0.0,
+                    maxHR: 0.0,
                     steps: entity.steps,
-                    respiratoryRate: entity.respiratoryRate ?? 16.0,
-                    oxygenSaturation: entity.oxygenSaturation ?? 98.0,
-                    bodyTemperature: entity.bodyTemperature ?? 36.5
+                    respiratoryRate: entity.respiratoryRate ?? 0.0,
+                    oxygenSaturation: entity.oxygenSaturation ?? 0.0,
+                    bodyTemperature: entity.bodyTemperature ?? 0.0
                 ))
             }
             self.historicalMetrics = metrics
@@ -476,18 +494,18 @@ class HealthKitManager: ObservableObject {
             
             var metrics: [DailyMetrics] = []
             
-            let allDates = Set(activeCals.keys)
-                .union(rhrs.keys)
-                .union(hrvs.keys)
-                .union(sleep.keys)
-                .union(workouts.keys)
-                .union(hrStats.keys)
-                .union(steps.keys)
-                .union(respRates.keys)
-                .union(oxygenSats.keys)
-                .union(bodyTemps.keys)
-            
-            let sortedDates = allDates.sorted()
+            let calendar = Calendar.current
+            var sortedDates: [Date] = []
+            var curr = calendar.startOfDay(for: startDate)
+            let todayStart = calendar.startOfDay(for: now)
+            while curr <= todayStart {
+                sortedDates.append(curr)
+                if let next = calendar.date(byAdding: .day, value: 1, to: curr) {
+                    curr = next
+                } else {
+                    break
+                }
+            }
             
             var hrvHistory: [Double] = []
             var rhrHistory: [Double] = []
@@ -554,8 +572,8 @@ class HealthKitManager: ObservableObject {
                     recoveryScore: recScore,
                     strainScore: strainScore,
                     sleepScore: sleepScore,
-                    hrv: hrvVal > 0 ? hrvVal : 55.0,
-                    rhr: rhrVal > 0 ? rhrVal : 60.0,
+                    hrv: hrvVal,
+                    rhr: rhrVal,
                     sleepDuration: sleepData.duration,
                     sleepNeeded: 8.0,
                     deepMinutes: sleepData.deep,
@@ -929,7 +947,11 @@ class HealthKitManager: ObservableObject {
             "HKQuantityTypeIdentifierRespiratoryRate",
             "HKQuantityTypeIdentifierOxygenSaturation",
             "HKQuantityTypeIdentifierBodyTemperature",
-            "HKQuantityTypeIdentifierAppleSleepingWristTemperature"
+            "HKQuantityTypeIdentifierAppleSleepingWristTemperature",
+            "HKQuantityTypeIdentifierBodyFatPercentage",
+            "HKQuantityTypeIdentifierVO2Max",
+            "HKQuantityTypeIdentifierBodyMassIndex",
+            "HKQuantityTypeIdentifierBodyMass"
         ]
         
         let group = DispatchGroup()
@@ -1119,13 +1141,39 @@ class HealthKitManager: ObservableObject {
         }
     }
     
+    func loadSleepStages(for date: Date) -> [SleepStageSample] {
+        let calendar = Calendar.current
+        let dayStart = calendar.date(byAdding: .day, value: -1, to: calendar.startOfDay(for: date))!
+        let dayEnd = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: date))!
+        let raw = LocalPersistenceManager.shared.fetchSamples(
+            typeIdentifier: HKCategoryTypeIdentifier.sleepAnalysis.rawValue,
+            from: dayStart,
+            to: dayEnd
+        )
+        return raw.compactMap { sample in
+            let hour = calendar.component(.hour, from: sample.endDate)
+            let sleepDay = hour < 12 ? sample.endDate : (calendar.date(byAdding: .day, value: 1, to: sample.endDate) ?? sample.endDate)
+            guard calendar.isDate(sleepDay, inSameDayAs: date) else { return nil }
+            let val = Int(sample.value)
+            let stage: Int
+            switch val {
+            case 1, 3: stage = 1
+            case 4:    stage = 3
+            case 5:    stage = 2
+            case 2:    stage = 0
+            default:   return nil
+            }
+            return SleepStageSample(startDate: sample.startDate, endDate: sample.endDate, stage: stage)
+        }.sorted { $0.startDate < $1.startDate }
+    }
+
     func loadMetricsFromLocalStore() {
         let calendar = Calendar.current
         let now = Date()
         let startOfDay = calendar.startOfDay(for: now)
         
-        // 1. Today's Sleep (from 24 hours ago to now)
-        let sleepStart = calendar.date(byAdding: .day, value: -1, to: now)!
+        // 1. Today's Sleep (from 7 days ago to now)
+        let sleepStart = calendar.date(byAdding: .day, value: -7, to: now)!
         let sleepSamples = LocalPersistenceManager.shared.fetchSamples(
             typeIdentifier: HKCategoryTypeIdentifier.sleepAnalysis.rawValue,
             from: sleepStart,
@@ -1187,8 +1235,35 @@ class HealthKitManager: ObservableObject {
             to: now
         )
         let vitalsSamples = rrSamples + spo2Samples + wristTempSamples + bodyTempSamples
-        
-        // 5. Today's Heart Rates (Average & Max)
+
+        // 5. Body composition & VO2 max — sporadic, look back 90 days for most recent reading
+        let bodyCompStart = calendar.date(byAdding: .day, value: -90, to: now)!
+
+        let bodyFatSamples = LocalPersistenceManager.shared.fetchSamples(
+            typeIdentifier: "HKQuantityTypeIdentifierBodyFatPercentage",
+            from: bodyCompStart, to: now
+        )
+        self.todayBodyFatPercentage = (bodyFatSamples.last?.value ?? 0.0) * 100.0
+
+        let vo2Samples = LocalPersistenceManager.shared.fetchSamples(
+            typeIdentifier: "HKQuantityTypeIdentifierVO2Max",
+            from: bodyCompStart, to: now
+        )
+        self.todayVO2Max = vo2Samples.last?.value ?? 0.0
+
+        let bmiSamples = LocalPersistenceManager.shared.fetchSamples(
+            typeIdentifier: "HKQuantityTypeIdentifierBodyMassIndex",
+            from: bodyCompStart, to: now
+        )
+        self.todayBMI = bmiSamples.last?.value ?? 0.0
+
+        let weightSamples = LocalPersistenceManager.shared.fetchSamples(
+            typeIdentifier: "HKQuantityTypeIdentifierBodyMass",
+            from: bodyCompStart, to: now
+        )
+        self.todayWeight = weightSamples.last?.value ?? 0.0
+
+        // 6. Today's Heart Rates (Average & Max)
         let hrSamples = LocalPersistenceManager.shared.fetchSamples(
             typeIdentifier: HKQuantityTypeIdentifier.heartRate.rawValue,
             from: startOfDay,
@@ -1196,19 +1271,21 @@ class HealthKitManager: ObservableObject {
         )
         let hrValues = hrSamples.map { $0.value }
         
-        // Convert recent workouts into RawWorkouts for the AnalysisEngine
-        let rawWorkouts = self.recentWorkouts.map { w in
-            RawWorkout(
-                id: w.id,
-                startDate: w.date,
-                endDate: w.date.addingTimeInterval(w.durationMinutes * 60),
-                durationMinutes: w.durationMinutes,
-                activeCaloriesBurned: w.activeEnergyBurned,
-                averageHeartRate: w.averageHeartRate,
-                workoutActivityType: 0,
-                name: w.name
-            )
-        }
+        // Only today's workouts contribute to today's strain calculation
+        let rawWorkouts = self.recentWorkouts
+            .filter { $0.date >= startOfDay }
+            .map { w in
+                RawWorkout(
+                    id: w.id,
+                    startDate: w.date,
+                    endDate: w.date.addingTimeInterval(w.durationMinutes * 60),
+                    durationMinutes: w.durationMinutes,
+                    activeCaloriesBurned: w.activeEnergyBurned,
+                    averageHeartRate: w.averageHeartRate,
+                    workoutActivityType: 0,
+                    name: w.name
+                )
+            }
         
         let profile = UserProfile(
             age: self.userAge,
@@ -1245,6 +1322,8 @@ class HealthKitManager: ObservableObject {
         self.todayRespiratoryRate = state.vitalsRespiratoryRate
         self.todayOxygenSaturation = state.vitalsOxygenSaturation * 100.0
         self.todayBodyTemperature = state.vitalsWristTemperature > 0 ? state.vitalsWristTemperature : state.vitalsBodyTemperature
+        self.sleepDataDate = state.sleepDataDate
+        self.isSleepDataStale = state.isSleepDataStale
         
         self.todayStressAverage = state.todayStressAverage
         self.todayStressHighest = state.todayStressHighest
@@ -1277,6 +1356,20 @@ class HealthKitManager: ObservableObject {
             self.todayAverageHR = self.todayRHR > 0 ? self.todayRHR + 20.0 : 72.0
             self.todayMaxHR = self.todayAverageHR > 0 ? self.todayAverageHR + 45.0 : 135.0
         }
+
+        // Write to App Group so the widget always has fresh data
+        SharedStore.save(
+            activenessScore: self.activenessScore,
+            recovery:        self.todayRecovery,
+            strain:          self.todayStrain,
+            sleep:           self.todaySleepScore,
+            steps:           self.todaySteps,
+            calories:        self.todayActiveCalories,
+            hrv:             self.todayHRV,
+            rhr:             self.todayRHR,
+            energyBank:      self.energyBank,
+            stressAvg:       self.todayStressAverage
+        )
     }
 }
 

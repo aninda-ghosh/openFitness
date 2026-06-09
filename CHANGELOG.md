@@ -6,6 +6,32 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.3.0] — 2026-06-09
+
+### Added
+- **Body Composition section** on the Dashboard — 2×2 grid of tiles for Body Fat %, VO₂ Max, BMI, and Body Weight, each linking to a dedicated detail view.
+- **`VitalsDetailView` for body composition** — extended lookback windows (60 days for 3-day view, 90 days for week, 6 months for month, 3 years for year) to surface infrequently measured data; starts at 3-day (no day view).
+- **`ActivenessDetailView`** — full history and trends for the Activeness Score with day / 3-day / week / 30-day / year timeframe selectors, period-averaged sub-score breakdown, and a settings entry point.
+- **User-configurable activity thresholds** — `ActivityThresholdSettingsSheet` lets users set daily steps goal (3k–20k), calorie goal (200–1 200 kcal), and optimal strain (5–20). Changes trigger a 7-day recalibration window shown as a badge on the Activeness Score card.
+- **WidgetKit extension** (`openFitness-widgetExtension`) — medium home-screen widget displaying Activeness Score, Recovery, Sleep, Strain, active steps, and calories. Reads shared data via iCloud Key-Value Store.
+- **Background sync** — `HKObserverQuery` with `enableBackgroundDelivery` for HRV, RHR, steps, and active energy wakes the app on new data; `BGAppRefreshTask` (`openFitness.bg.refresh`) fires every ~15 min as a fallback. Both paths update the widget via `WidgetCenter.reloadAllTimelines()`.
+- **`SharedStore`** — iCloud KV Store wrapper that the main app writes to after every metrics load and the widget reads from.
+
+### Changed
+- Replaced **Lean Body Mass** tile with **Body Weight** (`HKQuantityTypeIdentifierBodyMass`) throughout Dashboard, HealthKitManager, and HealthKitIngester.
+- **Activeness Score card** redesigned: score and arc gauge on separate lines to prevent title wrapping; calibration badge shows "RECALIBRATING Xd" (orange) or "CALIBRATED" (green).
+- **Month-view X-axis labels** now show actual dates ("1 Jun", "8 Jun" …) instead of day-of-week names ("Sat", "Sun").
+- **X-axis label thinning** applied to all dense chart views — renders at most every nth label (`step = max(1, count / 8)`) to prevent overflow beyond screen bounds.
+- **Activeness Score gauge and sub-score breakdown** now reflect the selected timeframe (week / month / year) by averaging historical daily metrics rather than always showing today's values.
+- `HealthKitManager` gains a `static let shared` singleton for use by background task handlers.
+- `openFitnessApp` adopts `@UIApplicationDelegateAdaptor(AppDelegate.self)` to register background tasks and HealthKit observer queries at launch.
+
+### Fixed
+- Body composition vitals detail views showing empty charts for week / month / year timeframes.
+- End-date boundary bug where readings recorded on the current day were excluded from "today" queries.
+- Month/6-month chart keying colliding across years (Jan 2024 and Jan 2025 were merged into one bar).
+- Component breakdown on `ActivenessDetailView` not updating when switching timeframes.
+
 ## [0.2.0] — 2026-06-07
 
 ### Added

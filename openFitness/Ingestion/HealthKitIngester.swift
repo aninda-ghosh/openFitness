@@ -33,7 +33,10 @@ public final class HealthKitIngester: Sendable {
             HKObjectType.characteristicType(forIdentifier: .dateOfBirth)!,
             HKObjectType.characteristicType(forIdentifier: .biologicalSex)!,
             HKObjectType.quantityType(forIdentifier: .height)!,
-            HKObjectType.quantityType(forIdentifier: .bodyMass)!
+            HKObjectType.quantityType(forIdentifier: .bodyMass)!,
+            HKObjectType.quantityType(forIdentifier: .bodyFatPercentage)!,
+            HKObjectType.quantityType(forIdentifier: .vo2Max)!,
+            HKObjectType.quantityType(forIdentifier: .bodyMassIndex)!
         ]
         
         healthStore.requestAuthorization(toShare: nil, read: typesToRead, completion: completion)
@@ -736,6 +739,14 @@ public final class HealthKitIngester: Sendable {
             return HKUnit.degreeCelsius()
         case HKQuantityTypeIdentifier.height.rawValue:
             return HKUnit.meterUnit(with: .centi)
+        case HKQuantityTypeIdentifier.bodyMass.rawValue:
+            return HKUnit.gramUnit(with: .kilo)
+        case HKQuantityTypeIdentifier.bodyFatPercentage.rawValue:
+            return HKUnit.percent()
+        case HKQuantityTypeIdentifier.vo2Max.rawValue:
+            return HKUnit(from: "ml/kg·min")
+        case HKQuantityTypeIdentifier.bodyMassIndex.rawValue:
+            return HKUnit.count()
         case HKQuantityTypeIdentifier.bodyMass.rawValue:
             return HKUnit.gramUnit(with: .kilo)
         default:

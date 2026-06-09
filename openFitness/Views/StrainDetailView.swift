@@ -11,59 +11,59 @@ struct StrainDetailView: View {
     
     @State private var selectedTimeframe: Timeframe = .day
     @State private var showAlgorithmDetails = false
-    
+    @State private var selectedDay: Date = Calendar.current.startOfDay(for: Date())
+
+    private var cal: Calendar { Calendar.current }
+    private var isViewingToday: Bool { cal.isDateInToday(selectedDay) }
+    private var dayMetrics: DailyMetrics? {
+        guard !isViewingToday else { return nil }
+        return historicalMetrics.first { cal.isDate($0.date, inSameDayAs: selectedDay) }
+    }
+
     private var historicalMetrics: [DailyMetrics] {
         hkManager.historicalMetrics
     }
-    
+
     private var filteredMetrics: [DailyMetrics] {
-        var metrics: [DailyMetrics]
         switch selectedTimeframe {
         case .day:
             return []
+        case .threeDays:
+            let start = cal.date(byAdding: .day, value: -2, to: selectedDay)!
+            return historicalMetrics.filter { $0.date >= start && $0.date <= selectedDay }
         case .week:
-            metrics = Array(historicalMetrics.suffix(7))
+            let start = cal.date(byAdding: .day, value: -6, to: selectedDay)!
+            return historicalMetrics.filter { $0.date >= start && $0.date <= selectedDay }
         case .month:
-            metrics = Array(historicalMetrics.suffix(30))
+            let start = cal.date(byAdding: .day, value: -29, to: selectedDay)!
+            return historicalMetrics.filter { $0.date >= start && $0.date <= selectedDay }
+        case .sixMonths:
+            let start = cal.date(byAdding: .day, value: -179, to: selectedDay)!
+            return historicalMetrics.filter { $0.date >= start && $0.date <= selectedDay }
         case .year:
-            metrics = historicalMetrics
+            let start = cal.date(byAdding: .day, value: -364, to: selectedDay)!
+            return historicalMetrics.filter { $0.date >= start && $0.date <= selectedDay }
         }
-        
-        let calendar = Calendar.current
-        let todayStart = calendar.startOfDay(for: Date())
-        if !metrics.contains(where: { calendar.isDate($0.date, inSameDayAs: todayStart) }) {
-            let todayMetric = DailyMetrics(
-                date: todayStart,
-                recoveryScore: hkManager.todayRecovery,
-                strainScore: strain,
-                sleepScore: hkManager.todaySleepScore,
-                hrv: hkManager.todayHRV,
-                rhr: hkManager.todayRHR,
-                sleepDuration: hkManager.todaySleepHours,
-                sleepNeeded: hkManager.todaySleepNeeded,
-                deepMinutes: hkManager.todayDeepMinutes,
-                remMinutes: hkManager.todayRemMinutes,
-                activeCalories: hkManager.todayActiveCalories,
-                averageHR: hkManager.todayAverageHR > 0 ? hkManager.todayAverageHR : (hkManager.todayRHR > 0 ? hkManager.todayRHR + 20.0 : 80.0),
-                maxHR: hkManager.todayMaxHR > 0 ? hkManager.todayMaxHR : (hkManager.todayRHR > 0 ? hkManager.todayRHR + 65.0 : 140.0),
-                steps: hkManager.todaySteps,
-                respiratoryRate: hkManager.todayRespiratoryRate,
-                oxygenSaturation: hkManager.todayOxygenSaturation,
-                bodyTemperature: hkManager.todayBodyTemperature
-            )
-            metrics.append(todayMetric)
-        }
-        return metrics
     }
-    
+
+    private var displayStrainValue: Double {
+        isViewingToday ? strain : (dayMetrics?.strainScore ?? 0)
+    }
+    private var displayCalories: Double {
+        isViewingToday ? calories : (dayMetrics?.activeCalories ?? 0)
+    }
+    private var displayAvgHR: Double {
+        isViewingToday ? avgHR : (dayMetrics?.averageHR ?? 0)
+    }
+
     private var displayStrain: Double {
         if selectedTimeframe == .day {
-            return strain
+            return displayStrainValue
         }
         let metrics = filteredMetrics
         let scores = metrics.map { $0.strainScore }
         if scores.isEmpty {
-            return strain
+            return displayStrainValue
         }
         return scores.reduce(0.0, +) / Double(scores.count)
     }
@@ -234,84 +234,82 @@ struct StrainDetailView: View {
         
         switch selectedTimeframe {
         case .day:
-            let startOfDay = calendar.startOfDay(for: Date())
-            let now = Date()
-            
+            let startOfDay = calendar.startOfDay(for: selectedDay)
+            let endOfDay = isViewingToday ? Date() : calendar.date(byAdding: .day, value: 1, to: startOfDay)!.addingTimeInterval(-1)
+            let targetStrain = displayStrainValue  // exact strain for selectedDay
+
             let energySamples = LocalPersistenceManager.shared.fetchSamples(
                 typeIdentifier: "HKQuantityTypeIdentifierActiveEnergyBurned",
                 from: startOfDay,
-                to: now
+                to: endOfDay
             )
-            
+
             var hourlyLoad = [Double](repeating: 0.0, count: 24)
             for sample in energySamples {
                 let hour = calendar.component(.hour, from: sample.startDate)
-                if hour >= 0 && hour < 24 {
-                    hourlyLoad[hour] += sample.value
-                }
+                if hour >= 0 && hour < 24 { hourlyLoad[hour] += sample.value }
             }
-            
-            let todayWorkouts = hkManager.timeframeWorkouts.filter { calendar.isDate($0.date, inSameDayAs: now) }
-            for w in todayWorkouts {
+
+            // Add workout TRIMP contribution for the selected day
+            let dayWorkouts = hkManager.timeframeWorkouts.filter { calendar.isDate($0.date, inSameDayAs: selectedDay) }
+            for w in dayWorkouts {
                 let hour = calendar.component(.hour, from: w.date)
                 if hour >= 0 && hour < 24 {
-                    let maxHR = 190.0
-                    let hrRatio = w.averageHeartRate / maxHR
-                    let zoneMultiplier: Double
-                    if hrRatio >= 0.9 { zoneMultiplier = 5.0 }
-                    else if hrRatio >= 0.8 { zoneMultiplier = 4.0 }
-                    else if hrRatio >= 0.7 { zoneMultiplier = 3.0 }
-                    else if hrRatio >= 0.6 { zoneMultiplier = 2.0 }
-                    else { zoneMultiplier = 1.0 }
-                    
-                    let workoutTRIMP = w.durationMinutes * zoneMultiplier
-                    hourlyLoad[hour] += workoutTRIMP * 10.0
+                    let hrRatio = w.averageHeartRate / 190.0
+                    let zoneMultiplier: Double = hrRatio >= 0.9 ? 5 : hrRatio >= 0.8 ? 4 : hrRatio >= 0.7 ? 3 : hrRatio >= 0.6 ? 2 : 1
+                    hourlyLoad[hour] += w.durationMinutes * zoneMultiplier * 10.0
                 }
             }
-            
+
             var cumulativeLoad = [Double](repeating: 0.0, count: 24)
             var currentLoad = 0.0
             for hour in 0...23 {
                 currentLoad += hourlyLoad[hour]
                 cumulativeLoad[hour] = currentLoad
             }
-            
+
             let totalLoad = cumulativeLoad[23]
-            let targetStrain = strain
             var targetTRIMP = 0.0
             if targetStrain > 0 {
                 let clampedStrain = min(20.9, targetStrain)
                 targetTRIMP = -log(1.0 - (clampedStrain / 21.0)) / 0.0035
             }
-            
+
             var strainAtHour = [Double](repeating: 0.0, count: 24)
-            for hour in 0...23 {
-                if totalLoad > 0 {
+            if totalLoad > 0 {
+                for hour in 0...23 {
                     let ratio = cumulativeLoad[hour] / totalLoad
-                    let hourlyTRIMP = ratio * targetTRIMP
-                    strainAtHour[hour] = PhysiologicalCalculators.calculateStrain(eTRIMP: hourlyTRIMP)
-                } else {
-                    if hour < 7 {
-                        strainAtHour[hour] = 0.0
-                    } else if hour > 22 {
-                        strainAtHour[hour] = targetStrain
-                    } else {
-                        let awakeProgress = Double(hour - 7) / 15.0
-                        let hourlyTRIMP = awakeProgress * targetTRIMP
-                        strainAtHour[hour] = PhysiologicalCalculators.calculateStrain(eTRIMP: hourlyTRIMP)
+                    strainAtHour[hour] = PhysiologicalCalculators.calculateStrain(eTRIMP: ratio * targetTRIMP)
+                }
+            } else if targetStrain > 0 {
+                if isViewingToday {
+                    // Project a ramp for today when no hourly data yet
+                    for hour in 0...23 {
+                        if hour < 7 { strainAtHour[hour] = 0.0 }
+                        else {
+                            let prog = Double(hour - 7) / 15.0
+                            strainAtHour[hour] = PhysiologicalCalculators.calculateStrain(eTRIMP: prog * targetTRIMP)
+                        }
                     }
+                } else {
+                    // Past day — no hourly breakdown, show final value at all segments
+                    for hour in 0...23 { strainAtHour[hour] = targetStrain }
                 }
             }
-            
+
             let segmentHours = [0, 3, 6, 9, 12, 15, 18, 21]
             let labels = ["12am", "3am", "6am", "9am", "12pm", "3pm", "6pm", "9pm"]
-            var points: [Double] = []
-            for hour in segmentHours {
-                points.append(strainAtHour[hour])
-            }
-            
+            let points = segmentHours.map { strainAtHour[$0] }
             return TimeframeData(points: points, labels: labels, average: targetStrain)
-            
+
+        case .threeDays:
+            let relevant = filteredMetrics
+            let points = relevant.map { $0.strainScore }
+            let formatter = DateFormatter(); formatter.dateFormat = "E"
+            let labels = relevant.map { formatter.string(from: $0.date) }
+            let average = points.isEmpty ? 0.0 : points.reduce(0, +) / Double(points.count)
+            return TimeframeData(points: points, labels: labels, average: average)
+
         case .week:
             let last7 = filteredMetrics
             let points = last7.map { $0.strainScore }
@@ -320,14 +318,36 @@ struct StrainDetailView: View {
             let labels = last7.map { formatter.string(from: $0.date) }
             let average = points.isEmpty ? 0.0 : points.reduce(0, +) / Double(points.count)
             return TimeframeData(points: points, labels: labels, average: average)
-            
+
         case .month:
             let last30 = filteredMetrics
             let points = last30.map { $0.strainScore }
             let labels = ["W1", "W2", "W3", "W4"]
             let average = points.isEmpty ? 0.0 : points.reduce(0, +) / Double(points.count)
             return TimeframeData(points: points, labels: labels, average: average)
-            
+
+        case .sixMonths:
+            var monthlySums6M: [Int: Double] = [:]
+            var monthlyCounts6M: [Int: Double] = [:]
+            var monthlyDates6M: [Int: Date] = [:]
+            for m in filteredMetrics {
+                let month = calendar.component(.month, from: m.date)
+                monthlySums6M[month, default: 0.0] += m.strainScore
+                monthlyCounts6M[month, default: 0.0] += 1.0
+                monthlyDates6M[month] = m.date
+            }
+            let sortedMonths6M = monthlyDates6M.keys.sorted { monthlyDates6M[$0]! < monthlyDates6M[$1]! }
+            let points6M = sortedMonths6M.map { month in
+                (monthlySums6M[month] ?? 0.0) / (monthlyCounts6M[month] ?? 1.0)
+            }
+            let formatter6M = DateFormatter()
+            formatter6M.dateFormat = "MMM"
+            let labels6M = sortedMonths6M.map { month in
+                formatter6M.string(from: monthlyDates6M[month]!)
+            }
+            let average6M = points6M.isEmpty ? 0.0 : points6M.reduce(0, +) / Double(points6M.count)
+            return TimeframeData(points: points6M, labels: labels6M, average: average6M)
+
         case .year:
             var monthlySums: [Int: Double] = [:]
             var monthlyCounts: [Int: Double] = [:]
@@ -364,6 +384,8 @@ struct StrainDetailView: View {
                     CustomSegmentedPicker(selection: $selectedTimeframe)
                         .padding(.top, 10)
 
+                    PeriodNavigationView(timeframe: .day, baseDate: $selectedDay, accentColor: Theme.Colors.strainHigh)
+
                     // Compact Score Card
                     HStack(spacing: 18) {
                         ZStack {
@@ -386,7 +408,7 @@ struct StrainDetailView: View {
                                     .font(Theme.Typography.roundedFont(size: 13, weight: .bold))
                                     .foregroundColor(.white)
                                 Text("/ 21")
-                                    .font(Theme.Typography.roundedFont(size: 8, weight: .semibold))
+                                    .font(Theme.Typography.tick)
                                     .foregroundColor(.white.opacity(0.4))
                             }
                         }
@@ -407,7 +429,8 @@ struct StrainDetailView: View {
                     .glassCard()
                     .padding(.horizontal)
                     
-                    // 1. Predictive Strain Planner Card (Today specific)
+                    // 1. Predictive Strain Planner — only meaningful for today
+                    if isViewingToday {
                     let prediction = predictedWorkoutMinutes
                     VStack(alignment: .leading, spacing: 14) {
                         HStack {
@@ -469,7 +492,8 @@ struct StrainDetailView: View {
                     }
                     .glassCard()
                     .padding(.horizontal)
-                    
+                    } // end if isViewingToday
+
                     // 2. Workout Breakdown Card
                     let totalDuration = hkManager.timeframeWorkouts.reduce(0.0) { $0 + $1.durationMinutes }
                     let totalCalories = hkManager.timeframeWorkouts.reduce(0.0) { $0 + $1.activeEnergyBurned }
@@ -480,7 +504,19 @@ struct StrainDetailView: View {
                                 Text("WORKOUT BREAKDOWN")
                                     .font(Theme.Typography.cardTitle)
                                     .foregroundColor(.white.opacity(0.5))
-                                Text(selectedTimeframe == .day ? "Today's Workouts" : (selectedTimeframe == .week ? "Weekly Workout Summary" : (selectedTimeframe == .month ? "Monthly Workout Summary" : "Annual Workout Summary")))
+                                Text({
+                                    switch selectedTimeframe {
+                                    case .day:
+                                        if isViewingToday { return "Today's Workouts" }
+                                        let fmt = DateFormatter(); fmt.dateFormat = "MMM d"
+                                        return "Workouts on \(fmt.string(from: selectedDay))"
+                                    case .threeDays: return "3-Day Workout Summary"
+                                    case .week: return "Weekly Workout Summary"
+                                    case .month: return "Monthly Workout Summary"
+                                    case .sixMonths: return "6-Month Workout Summary"
+                                    case .year: return "Annual Workout Summary"
+                                    }
+                                }())
                                     .font(Theme.Typography.roundedFont(size: 15, weight: .bold))
                                     .foregroundColor(.white)
                             }
@@ -499,28 +535,28 @@ struct StrainDetailView: View {
                             HStack(spacing: 20) {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text("WORKOUTS")
-                                        .font(Theme.Typography.roundedFont(size: 9, weight: .bold))
-                                        .foregroundColor(.white.opacity(0.4))
+                                        .font(Theme.Typography.tick)
+                                        .foregroundColor(.white.opacity(0.45))
                                     Text("\(hkManager.timeframeWorkouts.count)")
-                                        .font(Theme.Typography.roundedFont(size: 18, weight: .bold))
+                                        .font(Theme.Typography.titleSM)
                                         .foregroundColor(.white)
                                 }
                                 
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text("TOTAL TIME")
-                                        .font(Theme.Typography.roundedFont(size: 9, weight: .bold))
-                                        .foregroundColor(.white.opacity(0.4))
+                                        .font(Theme.Typography.tick)
+                                        .foregroundColor(.white.opacity(0.45))
                                     Text(formatDuration(totalDuration))
-                                        .font(Theme.Typography.roundedFont(size: 18, weight: .bold))
+                                        .font(Theme.Typography.titleSM)
                                         .foregroundColor(.white)
                                 }
                                 
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text("TOTAL CALORIES")
-                                        .font(Theme.Typography.roundedFont(size: 9, weight: .bold))
-                                        .foregroundColor(.white.opacity(0.4))
+                                        .font(Theme.Typography.tick)
+                                        .foregroundColor(.white.opacity(0.45))
                                     Text(String(format: "%.0f kcal", totalCalories))
-                                        .font(Theme.Typography.roundedFont(size: 18, weight: .bold))
+                                        .font(Theme.Typography.titleSM)
                                         .foregroundColor(.white)
                                 }
                             }
@@ -590,19 +626,23 @@ struct StrainDetailView: View {
                             labels: trendData.labels,
                             lineColor: Theme.Colors.strainHigh,
                             gradientColors: [Theme.Colors.strainHigh.opacity(0.2), .clear],
-                            visibleCount: selectedTimeframe == .day ? (Calendar.current.component(.hour, from: Date()) / 3 + 1) : nil
+                            visibleCount: selectedTimeframe == .day && isViewingToday
+                                ? (Calendar.current.component(.hour, from: Date()) / 3 + 1) : nil
                         )
                             .frame(height: 140)
                             .padding(.vertical, 8)
-                        
+
                         HStack {
-                            Text(String(format: "Average: %.1f", trendData.average))
+                            let labelPrefix = selectedTimeframe == .day ? "Strain: " : "Average: "
+                            Text(String(format: "\(labelPrefix)%.1f", trendData.average))
                                 .font(Theme.Typography.roundedFont(size: 13, weight: .semibold))
                                 .foregroundColor(.white.opacity(0.7))
                             Spacer()
-                            Text(String(format: "Today: %.1f", strain))
-                                .font(Theme.Typography.roundedFont(size: 13, weight: .bold))
-                                .foregroundColor(Theme.Colors.strainHigh)
+                            if isViewingToday {
+                                Text(String(format: "Today: %.1f", strain))
+                                    .font(Theme.Typography.roundedFont(size: 13, weight: .bold))
+                                    .foregroundColor(Theme.Colors.strainHigh)
+                            }
                         }
                     }
                     .glassCard()
@@ -626,7 +666,7 @@ struct StrainDetailView: View {
                     
                     // Heart Rate Zones details card (Recalculating Averages)
                     VStack(alignment: .leading, spacing: 16) {
-                        Text(selectedTimeframe == .day ? "Today's Cardio Zones" : (selectedTimeframe == .week ? "Weekly Average Cardio Zones" : (selectedTimeframe == .month ? "Monthly Average Cardio Zones" : "Annual Average Cardio Zones")))
+                        Text(selectedTimeframe == .day ? "Today's Cardio Zones" : (selectedTimeframe == .threeDays ? "3-Day Average Cardio Zones" : (selectedTimeframe == .week ? "Weekly Average Cardio Zones" : (selectedTimeframe == .month ? "Monthly Average Cardio Zones" : "Annual Average Cardio Zones"))))
                             .font(Theme.Typography.roundedFont(size: 16, weight: .bold))
                             .foregroundColor(.white)
                         
@@ -700,7 +740,7 @@ struct StrainDetailView: View {
         .onAppear {
             hkManager.fetchWorkoutsForTimeframe(timeframe: selectedTimeframe)
         }
-        .onChange(of: selectedTimeframe) { newTimeframe in
+        .onChange(of: selectedTimeframe) { _, newTimeframe in
             hkManager.fetchWorkoutsForTimeframe(timeframe: newTimeframe)
         }
     }
