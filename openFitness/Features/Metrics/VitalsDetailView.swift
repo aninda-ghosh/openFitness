@@ -22,8 +22,7 @@ struct VitalsDetailView: View {
     init(hkManager: HealthKitManager, type: VitalType) {
         self.hkManager = hkManager
         self.type = type
-        let isBodyComp = type == .bodyFatPercentage || type == .vo2Max || type == .bmi || type == .weight
-        _selectedTimeframe = State(initialValue: isBodyComp ? .threeDays : .day)
+        _selectedTimeframe = State(initialValue: .day)
     }
 
     private var cal: Calendar { Calendar.current }
@@ -132,6 +131,10 @@ struct VitalsDetailView: View {
         }
     }
     
+    private var isBodyComp: Bool {
+        type == .bodyFatPercentage || type == .vo2Max || type == .bmi || type == .weight
+    }
+
     private var historicalMetrics: [DailyMetrics] {
         hkManager.historicalMetrics
     }
@@ -140,10 +143,7 @@ struct VitalsDetailView: View {
         switch selectedTimeframe {
         case .day:
             return []
-        case .threeDays:
-            let start = cal.date(byAdding: .day, value: -2, to: selectedDay)!
-            return historicalMetrics.filter { $0.date >= start && $0.date <= selectedDay }
-        case .week:
+        case .threeDays, .week:
             let start = cal.date(byAdding: .day, value: -6, to: selectedDay)!
             return historicalMetrics.filter { $0.date >= start && $0.date <= selectedDay }
         case .month:
@@ -161,9 +161,10 @@ struct VitalsDetailView: View {
     private func directSamples(from start: Date, to end: Date) -> TimeframeData {
         let raw = LocalPersistenceManager.shared.fetchSamples(typeIdentifier: typeIdentifier, from: start, to: end)
         if raw.isEmpty { return TimeframeData(points: [], labels: [], average: 0) }
-        let dayCount: Int
-        let interval = end.timeIntervalSince(start) / 86400
-        dayCount = max(1, Int(interval))
+        // Count whole calendar days inclusive of the (possibly partial) last day,
+        // so a reading from earlier today is not dropped
+        let startDay = cal.startOfDay(for: start)
+        let dayCount = max(1, (cal.dateComponents([.day], from: startDay, to: end).day ?? 0) + 1)
         // Use date format (d MMM) for body comp — readings are sporadic so day-of-week is meaningless
         let fmt = DateFormatter(); fmt.dateFormat = "d MMM"
         var dailyVals: [(Date, Double)] = []
@@ -179,8 +180,8 @@ struct VitalsDetailView: View {
         }
         if dailyVals.isEmpty { return TimeframeData(points: [], labels: [], average: 0) }
         let points = dailyVals.map { $0.1 }
-        // Thin x-axis labels for dense charts: show every 5th + last to prevent overflow
-        let step = max(1, points.count / 8)
+        // Thin x-axis labels for dense charts: cap at ~6 visible labels to prevent overlap
+        let step = max(1, Int((Double(points.count) / 5.0).rounded(.up)))
         let labels = dailyVals.enumerated().map { (i, pair) -> String in
             (i % step == 0 || i == dailyVals.count - 1) ? fmt.string(from: pair.0) : ""
         }
@@ -209,16 +210,9 @@ struct VitalsDetailView: View {
 
     private func getVitalsData() -> TimeframeData {
         let calendar = Calendar.current
-        let isBodyComp = type == .bodyFatPercentage || type == .vo2Max || type == .bmi || type == .weight
 
         switch selectedTimeframe {
         case .day:
-            if isBodyComp {
-                // Body comp has no meaningful intra-day data — show 60-day recent readings instead
-                let start = cal.date(byAdding: .day, value: -60, to: selectedDay)!
-                let end = isViewingToday ? Date() : cal.date(byAdding: .day, value: 1, to: selectedDay)!
-                return directSamples(from: start, to: end)
-            }
             let dayStart = cal.startOfDay(for: selectedDay)
             let dayEnd = isViewingToday ? Date() : cal.date(byAdding: .day, value: 1, to: dayStart)!
             let labels = ["12am", "3am", "6am", "9am", "12pm", "3pm", "6pm", "9pm"]
@@ -238,28 +232,10 @@ struct VitalsDetailView: View {
             let avg = nonZero.isEmpty ? 0.0 : nonZero.reduce(0, +) / Double(nonZero.count)
             return TimeframeData(points: points, labels: labels, average: avg)
             
-        case .threeDays:
+        case .threeDays, .week:
             if isBodyComp {
-                // Body comp measured infrequently — look back 60 days to find recent readings
-                let start = cal.date(byAdding: .day, value: -60, to: selectedDay)!
-                let end = isViewingToday ? Date() : cal.date(byAdding: .day, value: 1, to: selectedDay)!
-                return directSamples(from: start, to: end)
-            }
-            let relevant = filteredMetrics.filter { m in
-                type == .respiratoryRate ? m.respiratoryRate > 0 : (type == .oxygenSaturation ? m.oxygenSaturation > 0 : m.bodyTemperature > 0)
-            }
-            let ptsThree = relevant.map { m -> Double in
-                type == .respiratoryRate ? m.respiratoryRate : (type == .oxygenSaturation ? m.oxygenSaturation : m.bodyTemperature)
-            }
-            let fmtThree = DateFormatter(); fmtThree.dateFormat = "E"
-            let labelsThree = relevant.map { fmtThree.string(from: $0.date) }
-            let avgThree = ptsThree.isEmpty ? 0.0 : ptsThree.reduce(0, +) / Double(ptsThree.count)
-            return TimeframeData(points: ptsThree, labels: labelsThree, average: avgThree)
-
-        case .week:
-            if isBodyComp {
-                // Look back 90 days — body comp readings may be weeks apart
-                let start = cal.date(byAdding: .day, value: -90, to: selectedDay)!
+                // True 7-day window — may be empty when no readings fall in the week
+                let start = cal.date(byAdding: .day, value: -6, to: cal.startOfDay(for: selectedDay))!
                 let end = isViewingToday ? Date() : cal.date(byAdding: .day, value: 1, to: selectedDay)!
                 return directSamples(from: start, to: end)
             }
@@ -276,10 +252,10 @@ struct VitalsDetailView: View {
 
         case .month:
             if isBodyComp {
-                // Look back 6 months for monthly body comp trend
-                let start = cal.date(byAdding: .month, value: -6, to: selectedDay)!
+                // True 30-day window with daily readings
+                let start = cal.date(byAdding: .day, value: -29, to: cal.startOfDay(for: selectedDay))!
                 let end = isViewingToday ? Date() : cal.date(byAdding: .day, value: 1, to: selectedDay)!
-                return directSamplesMonthly(from: start, to: end)
+                return directSamples(from: start, to: end)
             }
             let last30 = filteredMetrics.filter { m in
                 type == .respiratoryRate ? m.respiratoryRate > 0 : (type == .oxygenSaturation ? m.oxygenSaturation > 0 : m.bodyTemperature > 0)
@@ -293,8 +269,8 @@ struct VitalsDetailView: View {
 
         case .sixMonths:
             if isBodyComp {
-                // Look back 18 months for 6-month body comp view
-                let start = cal.date(byAdding: .month, value: -18, to: selectedDay)!
+                // True 6-month window (-179 days, app-wide convention), aggregated by month
+                let start = cal.date(byAdding: .day, value: -179, to: cal.startOfDay(for: selectedDay))!
                 let end = isViewingToday ? Date() : cal.date(byAdding: .day, value: 1, to: selectedDay)!
                 return directSamplesMonthly(from: start, to: end)
             }
@@ -320,8 +296,8 @@ struct VitalsDetailView: View {
 
         case .year:
             if isBodyComp {
-                // Look back 3 years for yearly body comp trend
-                let start = cal.date(byAdding: .year, value: -3, to: selectedDay)!
+                // True 1-year window (-364 days, app-wide convention), aggregated by month
+                let start = cal.date(byAdding: .day, value: -364, to: cal.startOfDay(for: selectedDay))!
                 let end = isViewingToday ? Date() : cal.date(byAdding: .day, value: 1, to: selectedDay)!
                 return directSamplesMonthly(from: start, to: end)
             }
@@ -380,9 +356,8 @@ struct VitalsDetailView: View {
     
     var body: some View {
         ZStack {
-            Theme.Colors.background
-                .ignoresSafeArea()
-            
+            AppBackground(accent: Theme.Colors.sleepLight)
+
             VStack(spacing: 0) {
                 // Header Bar
                 HStack {
@@ -414,10 +389,13 @@ struct VitalsDetailView: View {
                 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 20) {
-                        CustomSegmentedPicker(selection: $selectedTimeframe)
+                        CustomSegmentedPicker(selection: $selectedTimeframe, options: [.day, .week, .month, .sixMonths, .year])
                             .padding(.top, 10)
 
                         PeriodNavigationView(timeframe: .day, baseDate: $selectedDay, accentColor: Theme.Colors.sleepLight)
+
+                        MetricInsightCard(metric: .vitals, hkManager: hkManager)
+                            .padding(.horizontal)
 
                         // Hero Value Card
                         HStack(spacing: 18) {
@@ -470,7 +448,13 @@ struct VitalsDetailView: View {
                                     .font(Theme.Typography.roundedFont(size: 16, weight: .bold))
                                     .foregroundColor(.white)
                                 Spacer()
-                                Text(selectedTimeframe == .day ? "Overnight Cycles" : "Daily Trend")
+                                Text({
+                                    switch selectedTimeframe {
+                                    case .day: return isBodyComp ? "Today's Readings" : "Overnight Cycles"
+                                    case .sixMonths, .year: return "Monthly Trend"
+                                    default: return "Daily Trend"
+                                    }
+                                }())
                                     .font(Theme.Typography.roundedFont(size: 12, weight: .medium))
                                     .foregroundColor(.white.opacity(0.5))
                             }

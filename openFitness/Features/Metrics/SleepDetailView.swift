@@ -214,7 +214,7 @@ struct SleepDetailView: View {
     // MARK: - Body
     var body: some View {
         ZStack {
-            Theme.Colors.background.ignoresSafeArea()
+            AppBackground(accent: Theme.Colors.sleepDeep)
 
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 20) {
@@ -232,6 +232,9 @@ struct SleepDetailView: View {
                         baseDate: selectedTimeframe == .day ? $selectedDayDate : $baseDate,
                         accentColor: Theme.Colors.sleepDeep
                     )
+
+                    MetricInsightCard(metric: .sleep, hkManager: hkManager)
+                        .padding(.horizontal)
                     .onChange(of: selectedDayDate) { _, newDate in
                         if selectedTimeframe == .day && !calendar.isDateInToday(newDate) {
                             historicalDaySleepStages = hkManager.loadSleepStages(for: newDate)

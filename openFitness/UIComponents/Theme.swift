@@ -8,20 +8,20 @@ struct Theme {
         static let cardBackground = Color(red: 0.055, green: 0.055, blue: 0.055)  // #0E0E0E lifted black
         static let border        = Color.white.opacity(0.05)
 
-        // Recovery
-        static let recoveryHigh  = Color(red: 0.063, green: 1.0,   blue: 0.667)  // #10FFAA Electric Mint
-        static let recoveryMid   = Color(red: 1.0,   green: 0.839, blue: 0.039)  // #FFD60A Pure Gold
-        static let recoveryLow   = Color(red: 1.0,   green: 0.216, blue: 0.373)  // #FF375F Apple Health Red
+        // Recovery (desaturated ~12% from the original neons to sit on gradients)
+        static let recoveryHigh  = Color(red: 0.22,  green: 0.95,  blue: 0.69)   // Soft Mint
+        static let recoveryMid   = Color(red: 0.98,  green: 0.84,  blue: 0.18)   // Warm Gold
+        static let recoveryLow   = Color(red: 0.98,  green: 0.28,  blue: 0.41)   // Health Red
 
         // Strain
-        static let strainHigh    = Color(red: 1.0,   green: 0.420, blue: 0.0)    // #FF6B00 Deep Orange
-        static let strainLow     = Color(red: 1.0,   green: 0.576, blue: 0.251)  // #FF9340 Muted Orange
+        static let strainHigh    = Color(red: 1.0,   green: 0.50,  blue: 0.18)   // Deep Orange
+        static let strainLow     = Color(red: 1.0,   green: 0.62,  blue: 0.33)   // Muted Orange
 
         // Sleep
-        static let sleepDeep     = Color(red: 0.482, green: 0.380, blue: 1.0)    // #7B61FF Personal Purple
-        static let sleepREM      = Color(red: 0.749, green: 0.353, blue: 0.949)  // #BF5AF2 Vivid Violet
-        static let sleepLight    = Color(red: 0.039, green: 0.518, blue: 1.0)    // #0A84FF Apple Blue
-        static let sleepAwake    = Color(red: 1.0,   green: 0.624, blue: 0.039)  // #FF9F0A Warm Amber
+        static let sleepDeep     = Color(red: 0.53,  green: 0.45,  blue: 0.98)   // Personal Purple
+        static let sleepREM      = Color(red: 0.76,  green: 0.42,  blue: 0.93)   // Vivid Violet
+        static let sleepLight    = Color(red: 0.18,  green: 0.55,  blue: 0.98)   // Apple Blue
+        static let sleepAwake    = Color(red: 0.98,  green: 0.65,  blue: 0.16)   // Warm Amber
     }
     
     // MARK: - Typography (SF Pro Rounded)
@@ -61,22 +61,75 @@ struct Theme {
     }
 }
 
-// MARK: - View Modifiers for Flat Solid Cards
+// MARK: - Atmospheric Background
+
+/// Mesh-gradient backdrop: deep charcoal-navy with a wash of the screen's accent
+/// bleeding in from the top corner. Replaces the flat near-black background so
+/// glass chrome has something to refract and cards need less of their own chrome.
+struct AppBackground: View {
+    var accent: Color = Theme.Colors.recoveryHigh
+
+    var body: some View {
+        let base = Color(red: 0.025, green: 0.03, blue: 0.05)
+        let lift = Color(red: 0.05, green: 0.06, blue: 0.10)
+        let wash = accent.mix(with: base, by: 0.86)
+
+        MeshGradient(
+            width: 3, height: 3,
+            points: [
+                [0, 0], [0.5, 0], [1, 0],
+                [0, 0.5], [0.5, 0.5], [1, 0.5],
+                [0, 1], [0.5, 1], [1, 1]
+            ],
+            colors: [
+                wash, lift, base,
+                base, base, lift,
+                base, lift, base
+            ]
+        )
+        .ignoresSafeArea()
+    }
+}
+
+// MARK: - Open Section Header
+
+/// Sentence-case header for content that sits directly on the background
+/// instead of inside a card.
+struct SectionHeaderView: View {
+    let title: String
+    var subtitle: String? = nil
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title)
+                .font(Theme.Typography.titleSM)
+                .foregroundColor(.white.opacity(0.92))
+            if let subtitle {
+                Text(subtitle)
+                    .font(Theme.Typography.labelSM)
+                    .foregroundColor(.white.opacity(0.45))
+                    .lineLimit(2)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+// MARK: - View Modifiers for Soft Translucent Cards
 struct GlassmorphicModifier: ViewModifier {
-    var cornerRadius: CGFloat = 16
-    
+    var cornerRadius: CGFloat = 24
+
     func body(content: Content) -> some View {
         content
-            .padding()
+            .padding(18)
             .background(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(Theme.Colors.cardBackground)
+                    .fill(Color.white.opacity(0.045))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .stroke(Theme.Colors.border, lineWidth: 1.0)
+                    .stroke(Color.white.opacity(0.05), lineWidth: 1.0)
             )
-            .shadow(color: Color.black.opacity(0.5), radius: 8, x: 0, y: 4)
     }
 }
 
@@ -101,7 +154,7 @@ struct TactileButtonStyle: ButtonStyle {
 }
 
 extension View {
-    func glassCard(cornerRadius: CGFloat = 20) -> some View {
+    func glassCard(cornerRadius: CGFloat = 24) -> some View {
         self.modifier(GlassmorphicModifier(cornerRadius: cornerRadius))
     }
 }

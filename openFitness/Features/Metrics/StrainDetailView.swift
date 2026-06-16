@@ -376,15 +376,17 @@ struct StrainDetailView: View {
     
     var body: some View {
         ZStack {
-            Theme.Colors.background
-                .ignoresSafeArea()
-            
+            AppBackground(accent: Theme.Colors.strainHigh)
+
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 20) {
                     CustomSegmentedPicker(selection: $selectedTimeframe)
                         .padding(.top, 10)
 
                     PeriodNavigationView(timeframe: .day, baseDate: $selectedDay, accentColor: Theme.Colors.strainHigh)
+
+                    MetricInsightCard(metric: .strain, hkManager: hkManager)
+                        .padding(.horizontal)
 
                     // Compact Score Card
                     HStack(spacing: 18) {

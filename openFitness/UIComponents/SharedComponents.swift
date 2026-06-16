@@ -21,10 +21,11 @@ struct TimeframeData {
 // MARK: - Custom Premium Segmented Picker
 struct CustomSegmentedPicker: View {
     @Binding var selection: Timeframe
-    
+    var options: [Timeframe] = Timeframe.allCases
+
     var body: some View {
         HStack(spacing: 0) {
-            ForEach(Timeframe.allCases) { tf in
+            ForEach(options) { tf in
                 Text(tf.rawValue)
                     .font(Theme.Typography.roundedFont(size: 14, weight: .bold))
                     .foregroundColor(selection == tf ? .white : .white.opacity(0.4))
@@ -43,12 +44,7 @@ struct CustomSegmentedPicker: View {
             }
         }
         .padding(4)
-        .background(Color.white.opacity(0.04))
-        .cornerRadius(12)
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.white.opacity(0.08), lineWidth: 1)
-        )
+        .glassEffect(.regular, in: .rect(cornerRadius: 14, style: .continuous))
         .padding(.horizontal)
     }
 }
@@ -188,9 +184,8 @@ struct ECGDetailSheet: View {
     
     var body: some View {
         ZStack {
-            Theme.Colors.background
-                .ignoresSafeArea()
-            
+            AppBackground(accent: Theme.Colors.recoveryLow)
+
             VStack(spacing: 0) {
                 // Top Header Bar
                 HStack {
@@ -606,29 +601,12 @@ struct CustomLineGraph: View {
                 }
             }
             
-            // X-Axis Timeline Separator Line
+            // X-Axis Timeline Separator Line (labels intentionally omitted —
+            // the period navigator above the chart communicates the time range)
             Rectangle()
                 .fill(Color.white.opacity(0.1))
                 .frame(height: 1)
                 .padding(.horizontal, 2)
-            
-            // X-Axis Labels (Relative layout utilizing fixedSize to prevent wrapping)
-            HStack(spacing: 0) {
-                ForEach(0..<labels.count, id: \.self) { index in
-                    let labelText = labels[index]
-                    if !labelText.isEmpty {
-                        Text(labelText)
-                            .font(Theme.Typography.tick)
-                            .foregroundColor(.white.opacity(0.5))
-                            .lineLimit(1)
-                            .fixedSize(horizontal: true, vertical: false)
-                            .frame(maxWidth: .infinity)
-                    } else {
-                        Color.clear
-                            .frame(maxWidth: .infinity)
-                    }
-                }
-            }
         }
     }
 }

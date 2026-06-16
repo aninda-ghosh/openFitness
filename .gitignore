@@ -36,3 +36,10 @@ fastlane/test_output
 # Playgrounds
 timeline.xctimeline
 playground.xcworkspace
+
+# Local custom build directory
+build/
+
+# Agent IDE files
+.claude/
+.gemini/

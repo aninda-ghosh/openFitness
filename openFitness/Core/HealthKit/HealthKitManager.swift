@@ -955,12 +955,26 @@ class HealthKitManager: ObservableObject {
         ]
         
         let group = DispatchGroup()
-        
+
+        // One-time backfill: body comp history used to sync only 7 days back, so
+        // installs with existing anchors never fetched older readings. Drop those
+        // anchors once to re-run the initial (now 365-day) historical fetch.
+        let bodyCompBackfillKey = "bodyCompHistoryBackfill.v1"
+        let bodyCompTypes: Set<String> = [
+            "HKQuantityTypeIdentifierBodyFatPercentage",
+            "HKQuantityTypeIdentifierVO2Max",
+            "HKQuantityTypeIdentifierBodyMassIndex",
+            "HKQuantityTypeIdentifierBodyMass"
+        ]
+        let needsBodyCompBackfill = !UserDefaults.standard.bool(forKey: bodyCompBackfillKey)
+
         for typeId in typesToSync {
             group.enter()
-            
+
             var anchor: HKQueryAnchor? = nil
-            if let anchorData = LocalPersistenceManager.shared.getAnchorData(typeIdentifier: typeId) {
+            if needsBodyCompBackfill && bodyCompTypes.contains(typeId) {
+                anchor = nil
+            } else if let anchorData = LocalPersistenceManager.shared.getAnchorData(typeIdentifier: typeId) {
                 anchor = try? NSKeyedUnarchiver.unarchivedObject(ofClass: HKQueryAnchor.self, from: anchorData)
             }
             
@@ -1010,6 +1024,9 @@ class HealthKitManager: ObservableObject {
         }
         
         group.notify(queue: .main) { [weak self] in
+            if needsBodyCompBackfill {
+                UserDefaults.standard.set(true, forKey: bodyCompBackfillKey)
+            }
             LocalPersistenceManager.shared.purgeOldData()
             self?.isSyncing = false
             completion()

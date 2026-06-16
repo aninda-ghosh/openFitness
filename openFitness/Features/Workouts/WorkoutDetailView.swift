@@ -24,9 +24,8 @@ struct WorkoutDetailView: View {
     
     var body: some View {
         ZStack {
-            Theme.Colors.background
-                .ignoresSafeArea()
-            
+            AppBackground(accent: workout.themeColor)
+
             if isLoading {
                 VStack(spacing: 16) {
                     ProgressView()

@@ -107,7 +107,7 @@ struct FAQView: View {
 
     var body: some View {
         ZStack {
-            Theme.Colors.background.ignoresSafeArea()
+            AppBackground(accent: Theme.Colors.recoveryHigh)
 
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 28) {

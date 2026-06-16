@@ -194,8 +194,7 @@ struct RecoveryDetailView: View {
 
     var body: some View {
         ZStack {
-            Theme.Colors.background
-                .ignoresSafeArea()
+            AppBackground(accent: Theme.Colors.recoveryHigh)
 
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 20) {
@@ -203,6 +202,9 @@ struct RecoveryDetailView: View {
                         .padding(.top, 10)
 
                     PeriodNavigationView(timeframe: .day, baseDate: $selectedDay, accentColor: Theme.Colors.recoveryHigh)
+
+                    MetricInsightCard(metric: .recovery, hkManager: hkManager)
+                        .padding(.horizontal)
 
                     // Compact Score Card
                     HStack(spacing: 18) {

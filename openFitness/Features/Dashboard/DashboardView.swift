@@ -61,76 +61,103 @@ struct DashboardView: View {
     }
     
     var body: some View {
-        NavigationView {
+        // NavigationStack: the legacy NavigationView pops pushed views when the root
+        // rebuilds under hkManager's bursty @Published updates
+        NavigationStack {
             ZStack {
-                // Background Gradient
-                Theme.Colors.background
-                    .ignoresSafeArea()
-                
-                // Subtle fluid color blob behind dashboard
-                RadialGradient(
-                    colors: [Theme.Colors.sleepDeep.opacity(0.12), .clear],
-                    center: .topLeading,
-                    startRadius: 10,
-                    endRadius: 400
-                )
-                .ignoresSafeArea()
-                
+                // Atmospheric mesh backdrop with a mint wash
+                AppBackground(accent: Theme.Colors.recoveryHigh)
+
                 ScrollView(showsIndicators: false) {
-                    VStack(spacing: 12) {
+                    VStack(spacing: 24) {
                         HStack {
-                            Text("openFitness")
+                            Text("open\nFitness")
                                 .font(Theme.Typography.metricLabel(size: 28))
+                                .lineSpacing(-6)
                                 .foregroundColor(.white)
 
                             Spacer()
-
-                            if hkManager.isSyncing {
-                                HStack(spacing: 5) {
-                                    ProgressView()
-                                        .tint(Theme.Colors.sleepDeep)
-                                        .scaleEffect(0.6)
-                                        .frame(width: 12, height: 12)
-                                    Text("SYNCING...")
-                                        .font(Theme.Typography.roundedFont(size: 10, weight: .bold))
-                                        .foregroundColor(Theme.Colors.sleepDeep)
+                            VStack(alignment: .trailing, spacing: 6) {
+                                // Profile Expiry Timing Badge
+                                if let remainingText = ProfileExpiryHelper.getDaysRemaining() {
+                                    let isUrgent = ProfileExpiryHelper.isUrgent()
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "clock.fill")
+                                            .font(.system(size: 8))
+                                        Text(remainingText.uppercased())
+                                            .font(Theme.Typography.roundedFont(size: 10, weight: .bold))
+                                    }
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 5)
+                                    .foregroundColor(isUrgent ? Theme.Colors.recoveryLow : Theme.Colors.recoveryMid)
+                                    .background(isUrgent ? Theme.Colors.recoveryLow.opacity(0.12) : Theme.Colors.recoveryMid.opacity(0.12))
+                                    .cornerRadius(8)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .stroke(isUrgent ? Theme.Colors.recoveryLow.opacity(0.3) : Theme.Colors.recoveryMid.opacity(0.3), lineWidth: 1)
+                                    )
                                 }
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 5)
-                                .background(Theme.Colors.sleepDeep.opacity(0.12))
-                                .cornerRadius(12)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .stroke(Theme.Colors.sleepDeep.opacity(0.3), lineWidth: 1)
-                                )
-                            } else {
-                                // LIVE / OFFLINE badge
-                                HStack(spacing: 5) {
-                                    Circle()
-                                        .fill(hkManager.isAuthorized ? Color.green : Color.red)
-                                        .frame(width: 6, height: 6)
-                                    Text(hkManager.isAuthorized ? "LIVE" : "OFFLINE")
-                                        .font(Theme.Typography.roundedFont(size: 10, weight: .bold))
-                                        .foregroundColor(hkManager.isAuthorized ? Color.green : Color.red)
-                                }
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 5)
-                                .background(hkManager.isAuthorized ? Color.green.opacity(0.12) : Color.red.opacity(0.12))
-                                .cornerRadius(12)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .stroke(hkManager.isAuthorized ? Color.green.opacity(0.3) : Color.red.opacity(0.3), lineWidth: 1)
-                                )
-                            }
 
-                            // FAQ button
-                            Button(action: { showingFAQ = true }) {
-                                Image(systemName: "questionmark.circle")
-                                    .font(Theme.Typography.titleSM)
-                                    .foregroundColor(.white.opacity(0.45))
+                                // Second line: Live status and FAQ Button
+                                HStack(spacing: 6) {
+                                    // Live/Syncing Badge
+                                    if hkManager.isSyncing {
+                                        HStack(spacing: 4) {
+                                            ProgressView()
+                                                .tint(Theme.Colors.sleepDeep)
+                                                .scaleEffect(0.6)
+                                                .frame(width: 10, height: 10)
+                                            Text("SYNC")
+                                                .font(Theme.Typography.roundedFont(size: 10, weight: .bold))
+                                                .foregroundColor(Theme.Colors.sleepDeep)
+                                        }
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 5)
+                                        .background(Theme.Colors.sleepDeep.opacity(0.12))
+                                        .cornerRadius(8)
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 8)
+                                                .stroke(Theme.Colors.sleepDeep.opacity(0.3), lineWidth: 1)
+                                        )
+                                    } else {
+                                        HStack(spacing: 4) {
+                                            Circle()
+                                                .fill(hkManager.isAuthorized ? Color.green : Color.red)
+                                                .frame(width: 6, height: 6)
+                                            Text(hkManager.isAuthorized ? "LIVE" : "OFF")
+                                                .font(Theme.Typography.roundedFont(size: 10, weight: .bold))
+                                                .foregroundColor(hkManager.isAuthorized ? Color.green : Color.red)
+                                        }
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 5)
+                                        .background(hkManager.isAuthorized ? Color.green.opacity(0.12) : Color.red.opacity(0.12))
+                                        .cornerRadius(8)
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 8)
+                                                .stroke(hkManager.isAuthorized ? Color.green.opacity(0.3) : Color.red.opacity(0.3), lineWidth: 1)
+                                        )
+                                    }
+
+                                    // FAQ Button
+                                    Button(action: { showingFAQ = true }) {
+                                        HStack(spacing: 4) {
+                                            Image(systemName: "questionmark")
+                                                .font(.system(size: 10, weight: .bold))
+                                            Text("FAQ")
+                                                .font(Theme.Typography.roundedFont(size: 10, weight: .bold))
+                                        }
+                                        .foregroundColor(.white.opacity(0.85))
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 5)
+                                    }
+                                    .buttonStyle(PlainButtonStyle())
+                                    .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 8))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .stroke(Color.white.opacity(0.15), lineWidth: 1)
+                                    )
+                                }
                             }
-                            .buttonStyle(PlainButtonStyle())
-                            .padding(.leading, 8)
                         }
                         .padding(.horizontal)
                         .padding(.top, 10)
@@ -189,24 +216,14 @@ struct DashboardView: View {
                             .padding(.horizontal)
                         }
                         
-                        // Daily Summary Card (Compact)
-                        VStack(alignment: .leading, spacing: 14) {
-                            HStack {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("DAILY SUMMARY")
-                                        .font(Theme.Typography.cardTitle)
-                                        .foregroundColor(.white.opacity(0.6))
-                                    Text(dailySummaryText)
-                                        .font(Theme.Typography.roundedFont(size: 10, weight: .medium))
-                                        .foregroundColor(.white.opacity(0.4))
-                                        .lineLimit(2)
-                                        .multilineTextAlignment(.leading)
-                                }
-                                Spacer()
-                                Image(systemName: "circle.grid.3x3.fill")
-                                    .foregroundColor(Theme.Colors.recoveryHigh)
-                            }
-                            
+                        // AI Daily Pulse bubble (hidden when Apple Intelligence is unavailable)
+                        DailyPulseCard(hkManager: hkManager)
+                            .padding(.horizontal)
+
+                        // Daily Summary - open section, no card chrome
+                        VStack(alignment: .leading, spacing: 18) {
+                            SectionHeaderView(title: "Daily summary", subtitle: dailySummaryText)
+
                             HStack(spacing: 0) {
                                 // Ring 1: Recovery
                                 NavigationLink(destination: RecoveryDetailView(
@@ -266,11 +283,10 @@ struct DashboardView: View {
                                 }
                                 .buttonStyle(TactileButtonStyle())
                             }
-                            .padding(.top, 4)
+                            .padding(.top, 2)
                         }
-                        .glassCard()
-                        .padding(.horizontal)
-                        
+                        .padding(.horizontal, 20)
+
                         // Today's Activity Card (Steps & Active Energy)
                         VStack(alignment: .leading, spacing: 14) {
                             HStack {
@@ -562,6 +578,9 @@ struct DashboardView: View {
                         }
                     }
                     .padding(.bottom, 30)
+                    // Pin content to the scroll container's width so an over-wide
+                    // child can never make the whole page pannable sideways
+                    .containerRelativeFrame(.horizontal)
                 }
                 .refreshable {
                     await hkManager.fetchAllMetricsAsync()
@@ -582,8 +601,14 @@ struct DashboardView: View {
                 )
             }
             .onAppear {
+                AIDataSource.hkManager = hkManager
                 hkManager.requestAuthorization()
+                Task { await MorningPulseNotifier.requestPermissionIfNeeded() }
             }
+        }
+        // Floating coach bubble - stays above pushed detail views too
+        .overlay(alignment: .bottomTrailing) {
+            AskCoachFloatingButton()
         }
     }
 }
@@ -1324,7 +1349,7 @@ struct ActivenessScoreInfoSheet: View {
 
     var body: some View {
         ZStack {
-            Theme.Colors.background.ignoresSafeArea()
+            AppBackground(accent: Theme.Colors.recoveryHigh)
 
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 20) {
@@ -1699,6 +1724,72 @@ struct WorkoutIntensityLegend: View {
                 .font(Theme.Typography.tick)
                 .foregroundColor(.white.opacity(0.5))
         }
+    }
+}
+
+struct ProfileExpiryHelper {
+    static func getExpirationDate() -> Date? {
+        guard let url = Bundle.main.url(forResource: "embedded", withExtension: "mobileprovision") else {
+            return nil
+        }
+        
+        do {
+            let data = try Data(contentsOf: url)
+            
+            // The mobileprovision is a CMS/PKCS#7 signed message.
+            // Inside the signed data is an XML plist.
+            // We search for the boundary tags: <plist and </plist>
+            guard let plistStartRange = data.range(of: "<plist".data(using: .utf8)!) else {
+                return nil
+            }
+            guard let plistEndRange = data.range(of: "</plist>".data(using: .utf8)!) else {
+                return nil
+            }
+            
+            let plistData = data.subdata(in: plistStartRange.lowerBound..<plistEndRange.upperBound)
+            
+            if let plist = try PropertyListSerialization.propertyList(from: plistData, options: [], format: nil) as? [String: Any] {
+                return plist["ExpirationDate"] as? Date
+            }
+        } catch {
+            print("Error parsing embedded.mobileprovision: \(error)")
+        }
+        
+        return nil
+    }
+    
+    static func getDaysRemaining() -> String? {
+        guard let expirationDate = getExpirationDate() else {
+            return nil
+        }
+        
+        let now = Date()
+        let interval = expirationDate.timeIntervalSince(now)
+        
+        if interval <= 0 {
+            return "Expired"
+        }
+        
+        let days = Int(interval / 86400)
+        let hours = Int((interval.truncatingRemainder(dividingBy: 86400)) / 3600)
+        
+        if days > 0 {
+            return "\(days)d \(hours)h left"
+        } else {
+            return "\(hours)h left"
+        }
+    }
+    
+    static func isUrgent() -> Bool {
+        guard let expirationDate = getExpirationDate() else {
+            return false
+        }
+        
+        let now = Date()
+        let interval = expirationDate.timeIntervalSince(now)
+        
+        // Urgent if less than 24 hours left
+        return interval > 0 && interval < 86400
     }
 }
 

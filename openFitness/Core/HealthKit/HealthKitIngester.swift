@@ -96,6 +96,13 @@ public final class HealthKitIngester: Sendable {
                  HKQuantityTypeIdentifier.activeEnergyBurned.rawValue,
                  HKQuantityTypeIdentifier.stepCount.rawValue:
                 daysToSync = -30
+            case HKQuantityTypeIdentifier.bodyMass.rawValue,
+                 HKQuantityTypeIdentifier.bodyFatPercentage.rawValue,
+                 HKQuantityTypeIdentifier.bodyMassIndex.rawValue,
+                 HKQuantityTypeIdentifier.vo2Max.rawValue:
+                // Body composition readings are sparse (smart scale / manual entries),
+                // so fetch the full retention window to populate historic charts
+                daysToSync = -365
             default:
                 daysToSync = -7
             }

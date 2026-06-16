@@ -364,15 +364,17 @@ struct StressHeartRateDetailView: View {
     
     var body: some View {
         ZStack {
-            Theme.Colors.background
-                .ignoresSafeArea()
-            
+            AppBackground(accent: Theme.Colors.recoveryMid)
+
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 20) {
                     CustomSegmentedPicker(selection: $selectedTimeframe)
                         .padding(.top, 10)
 
                     PeriodNavigationView(timeframe: .day, baseDate: $selectedDay, accentColor: Theme.Colors.recoveryMid)
+
+                    MetricInsightCard(metric: .stress, hkManager: hkManager)
+                        .padding(.horizontal)
 
                     // Compact Score Card
                     HStack(spacing: 18) {

@@ -22,10 +22,8 @@ struct EnergyDetailView: View {
     
     var body: some View {
         ZStack {
-            // Background Gradient
-            Theme.Colors.background
-                .ignoresSafeArea()
-            
+            AppBackground(accent: Theme.Colors.sleepDeep)
+
             VStack(spacing: 0) {
                 // Header Bar
                 HStack {
@@ -65,7 +63,11 @@ struct EnergyDetailView: View {
                 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 20) {
-                        
+
+                        MetricInsightCard(metric: .energy, hkManager: hkManager)
+                            .padding(.horizontal)
+                            .padding(.top, 10)
+
                         // Hero Battery Section
                         VStack(spacing: 12) {
                             HStack(alignment: .center, spacing: 16) {
@@ -544,8 +546,8 @@ struct EnergyBankInfoSheet: View {
     
     var body: some View {
         ZStack {
-            Theme.Colors.background.ignoresSafeArea()
-            
+            AppBackground(accent: Theme.Colors.sleepDeep)
+
             VStack(alignment: .leading, spacing: 20) {
                 HStack {
                     Text("About Energy Bank")

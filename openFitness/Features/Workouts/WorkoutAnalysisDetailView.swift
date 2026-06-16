@@ -12,18 +12,20 @@ struct WorkoutAnalysisDetailView: View {
         let now = Date()
         let startDate: Date
         switch selectedTimeframe {
+        // Windows match the app-wide convention used by the daily-metric views:
+        // today plus the previous N-1 calendar days
         case .day:
             startDate = calendar.startOfDay(for: now)
         case .threeDays:
-            startDate = calendar.date(byAdding: .day, value: -3, to: now)!
+            startDate = calendar.date(byAdding: .day, value: -2, to: calendar.startOfDay(for: now))!
         case .week:
-            startDate = calendar.date(byAdding: .day, value: -7, to: now)!
+            startDate = calendar.date(byAdding: .day, value: -6, to: calendar.startOfDay(for: now))!
         case .month:
-            startDate = calendar.date(byAdding: .day, value: -30, to: now)!
+            startDate = calendar.date(byAdding: .day, value: -29, to: calendar.startOfDay(for: now))!
         case .sixMonths:
-            startDate = calendar.date(byAdding: .day, value: -180, to: now)!
+            startDate = calendar.date(byAdding: .day, value: -179, to: calendar.startOfDay(for: now))!
         case .year:
-            startDate = calendar.date(byAdding: .year, value: -1, to: now)!
+            startDate = calendar.date(byAdding: .day, value: -364, to: calendar.startOfDay(for: now))!
         }
         
         return hkManager.timeframeWorkouts.filter { $0.date >= startDate && $0.date <= now }
@@ -226,9 +228,8 @@ struct WorkoutAnalysisDetailView: View {
     
     var body: some View {
         ZStack {
-            Theme.Colors.background
-                .ignoresSafeArea()
-            
+            AppBackground(accent: Theme.Colors.strainHigh)
+
             VStack(spacing: 0) {
                 // Header Bar
                 HStack {
@@ -265,7 +266,10 @@ struct WorkoutAnalysisDetailView: View {
                             .onChange(of: selectedTimeframe) { _, newValue in
                                 hkManager.fetchWorkoutsForTimeframe(timeframe: newValue)
                             }
-                        
+
+                        MetricInsightCard(metric: .workouts, hkManager: hkManager)
+                            .padding(.horizontal)
+
                         // Hero Stats Card
                         VStack(alignment: .leading, spacing: 14) {
                             HStack {

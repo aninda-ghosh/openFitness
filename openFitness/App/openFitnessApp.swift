@@ -10,8 +10,11 @@ struct openFitnessApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            DashboardView()
                 .modelContainer(LocalPersistenceManager.shared.container)
+                // Propagates to every ScrollView: screens whose content fits stay
+                // fixed instead of rubber-banding when dragged
+                .scrollBounceBehavior(.basedOnSize, axes: [.vertical, .horizontal])
         }
     }
 }
@@ -49,6 +52,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
             // loadMetricsFromLocalStore already writes to SharedStore at end
             hkManager.loadMetricsFromLocalStore()
             WidgetCenter.shared.reloadAllTimelines()
+            await MorningPulseNotifier.deliverIfDue(using: hkManager)
             task.setTaskCompleted(success: true)
         }
     }
@@ -89,6 +93,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
             let hkManager = HealthKitManager.shared
             hkManager.loadMetricsFromLocalStore() // writes SharedStore internally
             WidgetCenter.shared.reloadAllTimelines()
+            await MorningPulseNotifier.deliverIfDue(using: hkManager)
             completionHandler()
         }
     }

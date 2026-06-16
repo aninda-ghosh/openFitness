@@ -98,9 +98,9 @@ struct ActivenessDetailView: View {
             return TimeframeData(points: pts, labels: thinLabels,
                                  average: pts.isEmpty ? 0 : pts.reduce(0, +) / Double(pts.count))
         case .sixMonths:
-            return monthlyAggregate(from: cal.date(byAdding: .month, value: -6, to: cal.startOfDay(for: Date()))!)
+            return monthlyAggregate(from: cal.date(byAdding: .day, value: -179, to: cal.startOfDay(for: Date()))!)
         case .year:
-            return monthlyAggregate(from: cal.date(byAdding: .year, value: -1, to: cal.startOfDay(for: Date()))!)
+            return monthlyAggregate(from: cal.date(byAdding: .day, value: -364, to: cal.startOfDay(for: Date()))!)
         }
     }
 
@@ -145,8 +145,8 @@ struct ActivenessDetailView: View {
             case .threeDays: return cal.date(byAdding: .day,   value: -2,  to: cal.startOfDay(for: Date()))!
             case .week:      return cal.date(byAdding: .day,   value: -6,  to: cal.startOfDay(for: Date()))!
             case .month:     return cal.date(byAdding: .day,   value: -29, to: cal.startOfDay(for: Date()))!
-            case .sixMonths: return cal.date(byAdding: .month, value: -6,  to: cal.startOfDay(for: Date()))!
-            default:         return cal.date(byAdding: .year,  value: -1,  to: cal.startOfDay(for: Date()))!
+            case .sixMonths: return cal.date(byAdding: .day,   value: -179, to: cal.startOfDay(for: Date()))!
+            default:         return cal.date(byAdding: .day,   value: -364, to: cal.startOfDay(for: Date()))!
             }
         }()
 
@@ -172,7 +172,7 @@ struct ActivenessDetailView: View {
 
     var body: some View {
         ZStack {
-            Theme.Colors.background.ignoresSafeArea()
+            AppBackground(accent: Theme.Colors.strainHigh)
 
             VStack(spacing: 0) {
                 // Header
@@ -211,6 +211,9 @@ struct ActivenessDetailView: View {
                         if selectedTimeframe == .day {
                             PeriodNavigationView(timeframe: .day, baseDate: $selectedDay, accentColor: Theme.Colors.strainHigh)
                         }
+
+                        MetricInsightCard(metric: .activeness, hkManager: hkManager)
+                            .padding(.horizontal)
 
                         // Hero Gauge
                         HStack(alignment: .center, spacing: 20) {
@@ -399,9 +402,9 @@ struct ActivityThresholdSettingsSheet: View {
     }
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ZStack {
-                Theme.Colors.background.ignoresSafeArea()
+                AppBackground(accent: Theme.Colors.strainHigh)
 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 20) {

@@ -237,9 +237,8 @@ struct ActivityDetailView: View {
     
     var body: some View {
         ZStack {
-            Theme.Colors.background
-                .ignoresSafeArea()
-            
+            AppBackground(accent: Theme.Colors.recoveryHigh)
+
             VStack(spacing: 0) {
                 // Header Bar
                 HStack {
@@ -270,7 +269,11 @@ struct ActivityDetailView: View {
                 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 20) {
-                        
+
+                        MetricInsightCard(metric: .activity, hkManager: hkManager)
+                            .padding(.horizontal)
+                            .padding(.top, 10)
+
                         // Tab Selector
                         HStack(spacing: 12) {
                             Button(action: {
