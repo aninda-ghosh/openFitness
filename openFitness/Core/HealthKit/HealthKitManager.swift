@@ -154,9 +154,48 @@ class HealthKitManager: ObservableObject {
     @Published var userWeightKg: Double = 70.0
     
     init() {
+        // Load whatever we have in the local database immediately so the UI is not blank
+        self.loadMetricsFromLocalStore()
+        self.loadHistoricalMetricsFromLocalStore()
+        
+        Task {
+            await AIInsightEngine.shared.prewarmInsights(hkManager: self)
+        }
+        
         if HealthKitIngester.shared.isHealthDataAvailable() {
             requestAuthorization()
         }
+    }
+    
+    func loadHistoricalMetricsFromLocalStore() {
+        let calendar = Calendar.current
+        let now = Date()
+        guard let startDate = calendar.date(byAdding: .day, value: -365, to: now) else { return }
+        
+        let cachedEntities = LocalPersistenceManager.shared.fetchDailyMetrics(from: startDate, to: now)
+        var metrics: [DailyMetrics] = []
+        for entity in cachedEntities {
+            metrics.append(DailyMetrics(
+                date: entity.date,
+                recoveryScore: entity.recovery,
+                strainScore: entity.strain,
+                sleepScore: entity.sleepScore,
+                hrv: entity.hrv ?? 0.0,
+                rhr: entity.rhr ?? 0.0,
+                sleepDuration: entity.sleepDuration ?? 0.0,
+                sleepNeeded: 8.0,
+                deepMinutes: 0.0,
+                remMinutes: 0.0,
+                activeCalories: entity.activeCalories,
+                averageHR: 0.0,
+                maxHR: 0.0,
+                steps: entity.steps,
+                respiratoryRate: entity.respiratoryRate ?? 0.0,
+                oxygenSaturation: entity.oxygenSaturation ?? 0.0,
+                bodyTemperature: entity.bodyTemperature ?? 0.0
+            ))
+        }
+        self.historicalMetrics = metrics
     }
     
     // MARK: - Authorization
@@ -257,6 +296,10 @@ class HealthKitManager: ObservableObject {
                     LocalPersistenceManager.shared.saveDailyMetric(todayMetric)
                     
                     completion?()
+                    
+                    Task {
+                        await AIInsightEngine.shared.prewarmInsights(hkManager: self)
+                    }
                 }
             }
         }

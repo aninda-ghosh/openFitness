@@ -418,6 +418,7 @@ struct WorkoutAnalysisDetailView: View {
                         }
                         .padding(.horizontal)
                     }
+                    .containerRelativeFrame(.horizontal)
                     .padding(.bottom, 30)
                 }
             }

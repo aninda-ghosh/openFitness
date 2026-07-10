@@ -49,8 +49,13 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
 
         Task { @MainActor in
             let hkManager = HealthKitManager.shared
-            // loadMetricsFromLocalStore already writes to SharedStore at end
-            hkManager.loadMetricsFromLocalStore()
+            
+            await withCheckedContinuation { continuation in
+                hkManager.fetchAllMetrics {
+                    continuation.resume()
+                }
+            }
+            
             WidgetCenter.shared.reloadAllTimelines()
             await MorningPulseNotifier.deliverIfDue(using: hkManager)
             task.setTaskCompleted(success: true)
@@ -91,10 +96,30 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
     private func handleHealthKitUpdate(completionHandler: @escaping () -> Void) {
         Task { @MainActor in
             let hkManager = HealthKitManager.shared
-            hkManager.loadMetricsFromLocalStore() // writes SharedStore internally
+            
+            await withCheckedContinuation { continuation in
+                hkManager.fetchAllMetrics {
+                    continuation.resume()
+                }
+            }
+            
             WidgetCenter.shared.reloadAllTimelines()
             await MorningPulseNotifier.deliverIfDue(using: hkManager)
             completionHandler()
         }
+    }
+}
+
+// MARK: - Navigation Gesture Restorer
+// Restores the interactive swipe-to-go-back gesture when custom back buttons
+// are used and the system navigation bar is hidden.
+extension UINavigationController: UIGestureRecognizerDelegate {
+    override open func viewDidLoad() {
+        super.viewDidLoad()
+        interactivePopGestureRecognizer?.delegate = self
+    }
+
+    public func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        return viewControllers.count > 1
     }
 }

@@ -318,6 +318,7 @@ struct WorkoutDetailView: View {
                         .glassCard()
                         .padding(.horizontal)
                     }
+                    .containerRelativeFrame(.horizontal)
                     .padding(.bottom, 30)
                 }
             } else {

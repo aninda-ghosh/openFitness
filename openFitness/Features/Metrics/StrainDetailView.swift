@@ -385,9 +385,6 @@ struct StrainDetailView: View {
 
                     PeriodNavigationView(timeframe: .day, baseDate: $selectedDay, accentColor: Theme.Colors.strainHigh)
 
-                    MetricInsightCard(metric: .strain, hkManager: hkManager)
-                        .padding(.horizontal)
-
                     // Compact Score Card
                     HStack(spacing: 18) {
                         ZStack {
@@ -398,7 +395,7 @@ struct StrainDetailView: View {
                             Circle()
                                 .trim(from: 0.0, to: CGFloat(min(1.0, displayStrain / 21.0)))
                                 .stroke(
-                                    LinearGradient(colors: [Theme.Colors.strainHigh, Theme.Colors.strainHigh.opacity(0.6)], startPoint: .top, endPoint: .bottom),
+                                    Theme.Colors.strainHigh,
                                     style: StrokeStyle(lineWidth: 6, lineCap: .round)
                                 )
                                 .frame(width: 64, height: 64)
@@ -733,7 +730,11 @@ struct StrainDetailView: View {
                     }
                     .glassCard()
                     .padding(.horizontal)
+
+                    MetricInsightCard(metric: .strain, hkManager: hkManager)
+                        .padding(.horizontal)
                 }
+                .containerRelativeFrame(.horizontal)
                 .padding(.bottom, 20)
             }
         }

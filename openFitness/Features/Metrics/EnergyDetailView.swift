@@ -61,12 +61,8 @@ struct EnergyDetailView: View {
                 .padding(.top, 8)
                 .padding(.bottom, 12)
                 
-                ScrollView(showsIndicators: false) {
+                ScrollView(.vertical, showsIndicators: false) {
                     VStack(spacing: 20) {
-
-                        MetricInsightCard(metric: .energy, hkManager: hkManager)
-                            .padding(.horizontal)
-                            .padding(.top, 10)
 
                         // Hero Battery Section
                         VStack(spacing: 12) {
@@ -105,7 +101,7 @@ struct EnergyDetailView: View {
                                         .frame(height: 8)
                                     
                                     Capsule()
-                                        .fill(LinearGradient(colors: [Theme.Colors.sleepDeep, Theme.Colors.recoveryHigh], startPoint: .leading, endPoint: .trailing))
+                                        .fill(Theme.Colors.sleepDeep)
                                         .frame(width: geo.size.width * CGFloat(displayEnergy) / 100.0, height: 8)
                                 }
                             }
@@ -113,17 +109,19 @@ struct EnergyDetailView: View {
                             .padding(.vertical, 4)
                             
                             // Three-pill row: Had / Charged / Drained
-                            HStack(spacing: 8) {
+                            HStack(spacing: 6) {
                                 // Had Pill
                                 HStack(spacing: 4) {
                                     Image(systemName: "battery.50")
                                         .foregroundColor(.white.opacity(0.6))
                                         .font(Theme.Typography.caption)
                                     Text(selectedTimeframe == .day ? "Had: \(hkManager.energyBankStart)%" : "Had")
-                                        .font(Theme.Typography.roundedFont(size: 11, weight: .bold))
+                                        .font(Theme.Typography.roundedFont(size: 10, weight: .bold))
                                         .foregroundColor(.white)
+                                        .lineLimit(1)
+                                        .minimumScaleFactor(0.8)
                                 }
-                                .padding(.horizontal, 8)
+                                .frame(maxWidth: .infinity)
                                 .padding(.vertical, 6)
                                 .background(Color.white.opacity(0.03))
                                 .cornerRadius(8)
@@ -131,8 +129,6 @@ struct EnergyDetailView: View {
                                     RoundedRectangle(cornerRadius: 8)
                                         .stroke(Color.white.opacity(0.04), lineWidth: 1)
                                 )
-                                
-                                Spacer(minLength: 0)
                                 
                                 // Total Charged Pill
                                 HStack(spacing: 4) {
@@ -140,10 +136,12 @@ struct EnergyDetailView: View {
                                         .foregroundColor(Theme.Colors.sleepDeep)
                                         .font(Theme.Typography.caption)
                                     Text(selectedTimeframe == .day ? "Charged: +\(hkManager.energyBankCharged)%" : "Charged")
-                                        .font(Theme.Typography.roundedFont(size: 11, weight: .bold))
+                                        .font(Theme.Typography.roundedFont(size: 10, weight: .bold))
                                         .foregroundColor(.white)
+                                        .lineLimit(1)
+                                        .minimumScaleFactor(0.8)
                                 }
-                                .padding(.horizontal, 8)
+                                .frame(maxWidth: .infinity)
                                 .padding(.vertical, 6)
                                 .background(Color.white.opacity(0.03))
                                 .cornerRadius(8)
@@ -152,18 +150,18 @@ struct EnergyDetailView: View {
                                         .stroke(Color.white.opacity(0.04), lineWidth: 1)
                                 )
                                 
-                                Spacer(minLength: 0)
-                                
                                 // Total Drained Pill
                                 HStack(spacing: 4) {
                                     Image(systemName: "arrow.down.circle.fill")
                                         .foregroundColor(Color(red: 0.96, green: 0.45, blue: 0.41))
                                         .font(Theme.Typography.caption)
                                     Text(selectedTimeframe == .day ? "Drained: -\(hkManager.energyBankDrained)%" : "Drained")
-                                        .font(Theme.Typography.roundedFont(size: 11, weight: .bold))
+                                        .font(Theme.Typography.roundedFont(size: 10, weight: .bold))
                                         .foregroundColor(.white)
+                                        .lineLimit(1)
+                                        .minimumScaleFactor(0.8)
                                 }
-                                .padding(.horizontal, 8)
+                                .frame(maxWidth: .infinity)
                                 .padding(.vertical, 6)
                                 .background(Color.white.opacity(0.03))
                                 .cornerRadius(8)
@@ -178,7 +176,7 @@ struct EnergyDetailView: View {
                         .padding(.horizontal)
                         
                         // Custom Timeframe Picker
-                        CustomSegmentedPicker(selection: $selectedTimeframe)
+                        CustomSegmentedPicker(selection: $selectedTimeframe, options: [.day, .week, .month, .sixMonths, .year])
                             .padding(.horizontal)
                             .onChange(of: selectedTimeframe) { _, _ in
                                 baseDate = Calendar.current.startOfDay(for: Date())
@@ -337,14 +335,17 @@ struct EnergyDetailView: View {
                                 Text("-\(calDr)%")
                                     .font(Theme.Typography.roundedFont(size: 14, weight: .bold))
                                     .foregroundColor(Color(red: 0.96, green: 0.45, blue: 0.41))
-                            }
-                            
                         }
-                        .padding()
+                    }
+                    .padding()
                         .glassCard()
                         .padding(.horizontal)
-                        .padding(.bottom, 24)
+
+                        MetricInsightCard(metric: .energy, hkManager: hkManager)
+                            .padding(.horizontal)
+                            .padding(.bottom, 24)
                     }
+                    .containerRelativeFrame(.horizontal)
                 }
             }
         }

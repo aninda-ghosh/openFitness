@@ -160,7 +160,7 @@ struct DashboardView: View {
                             }
                         }
                         .padding(.horizontal)
-                        .padding(.top, 10)
+                        .padding(.top, 54)
                         
                         // Hero Card: Activeness Score (calibrated) or Stay Active (uncalibrated)
                         if hkManager.isCalibrated {
@@ -202,27 +202,13 @@ struct DashboardView: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .background(
                                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .fill(
-                                        LinearGradient(
-                                            colors: [
-                                                Theme.Colors.recoveryHigh,
-                                                Theme.Colors.recoveryHigh.opacity(0.8)
-                                            ],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        )
-                                    )
+                                    .fill(Theme.Colors.recoveryHigh)
                             )
                             .padding(.horizontal)
                         }
                         
-                        // AI Daily Pulse bubble (hidden when Apple Intelligence is unavailable)
-                        DailyPulseCard(hkManager: hkManager)
-                            .padding(.horizontal)
-
-                        // Daily Summary - open section, no card chrome
+                         // Daily Summary - open section, no card chrome
                         VStack(alignment: .leading, spacing: 18) {
-                            SectionHeaderView(title: "Daily summary", subtitle: dailySummaryText)
 
                             HStack(spacing: 0) {
                                 // Ring 1: Recovery
@@ -263,8 +249,7 @@ struct DashboardView: View {
                                 .buttonStyle(TactileButtonStyle())
                                 
                                 Spacer()
-                                
-                                // Ring 3: Sleep
+                                                                // Ring 3: Sleep
                                 NavigationLink(destination: SleepDetailView(
                                     hkManager: hkManager,
                                     score: hkManager.todaySleepScore,
@@ -275,17 +260,17 @@ struct DashboardView: View {
                                 )) {
                                     CircularGaugeView(
                                         title: "Sleep",
-                                        value: "\(hkManager.todaySleepScore)",
-                                        progress: Double(hkManager.todaySleepScore) / 100.0,
+                                        value: hkManager.isSleepDataStale ? "N/A" : "\(hkManager.todaySleepScore)",
+                                        progress: hkManager.isSleepDataStale ? 0.0 : Double(hkManager.todaySleepScore) / 100.0,
                                         color: Theme.Colors.sleepDeep,
-                                        subtitle: hkManager.isSleepDataStale ? formatStaleDate(hkManager.sleepDataDate) : nil
+                                        subtitle: hkManager.isSleepDataStale ? "No Data" : nil
                                     )
                                 }
                                 .buttonStyle(TactileButtonStyle())
                             }
                             .padding(.top, 2)
                         }
-                        .padding(.horizontal, 20)
+                        .padding(.horizontal)
 
                         // Today's Activity Card (Steps & Active Energy)
                         VStack(alignment: .leading, spacing: 14) {
@@ -413,7 +398,7 @@ struct DashboardView: View {
                                             .frame(height: 8)
                                         
                                         Capsule()
-                                            .fill(LinearGradient(colors: [Theme.Colors.sleepDeep, Theme.Colors.recoveryHigh], startPoint: .leading, endPoint: .trailing))
+                                            .fill(Theme.Colors.sleepDeep)
                                             .frame(width: geo.size.width * CGFloat(hkManager.energyBank) / 100.0, height: 8)
                                     }
                                 }
@@ -442,7 +427,7 @@ struct DashboardView: View {
                                         Text("STRESS & HEART RATE")
                                             .font(Theme.Typography.cardTitle)
                                             .foregroundColor(.white.opacity(0.6))
-                                        Text("Tap to view autonomic stress & ECG")
+                                        Text("Tap to view autonomic stress")
                                             .font(Theme.Typography.roundedFont(size: 10, weight: .medium))
                                             .foregroundColor(.white.opacity(0.35))
                                     }
@@ -560,22 +545,6 @@ struct DashboardView: View {
 
                         // Weekly Workout Patterns Card
                         WorkoutPatternCard(workouts: hkManager.recentWorkouts, hkManager: hkManager)
-                        
-                        // 4. ECG Samples Card
-                        ECGCardView(ecgCount: hkManager.recentECGSamples.count) {
-                            if let sample = hkManager.recentECGSamples.first {
-                                hkManager.fetchECGVoltageSamples(for: sample) { points in
-                                    if points.isEmpty {
-                                        self.showingNoECGAlert = true
-                                    } else {
-                                        self.activeECGPoints = points
-                                        self.showingECGSheet = true
-                                    }
-                                }
-                            } else {
-                                self.showingNoECGAlert = true
-                            }
-                        }
                     }
                     .padding(.bottom, 30)
                     // Pin content to the scroll container's width so an over-wide
@@ -587,18 +556,8 @@ struct DashboardView: View {
                 }
             }
             .navigationBarHidden(true)
-            .sheet(isPresented: $showingECGSheet) {
-                ECGDetailSheet(waveformPoints: activeECGPoints)
-            }
             .sheet(isPresented: $showingFAQ) {
                 FAQView()
-            }
-            .alert(isPresented: $showingNoECGAlert) {
-                Alert(
-                    title: Text("No ECG Data Found"),
-                    message: Text("We couldn't find any ECG recordings on your Apple Watch. Take a recording using the ECG app on your Watch and sync it to Apple Health to view it here."),
-                    dismissButton: .default(Text("OK"))
-                )
             }
             .onAppear {
                 AIDataSource.hkManager = hkManager
@@ -826,10 +785,10 @@ struct VitalsMonitorView: View {
                     VitalTileView(
                         title: "Sleep Duration",
                         shortTitle: "Sleep",
-                        value: sleepHours > 0 ? formatSleepHours(sleepHours) : "--",
-                        status: hkManager.isSleepDataStale ? formatStaleDate(hkManager.sleepDataDate) : (sleepHours == 0 ? "No Data" : (sleepHours < 6.5 ? "Short" : "Normal")),
-                        color: sleepHours == 0 ? .gray : (sleepHours < 6.5 ? Theme.Colors.recoveryMid : Theme.Colors.recoveryHigh),
-                        ratio: sleepHours == 0 ? 0.5 : min(1.0, max(0.0, (sleepHours - 4.0) / 6.0)),
+                        value: hkManager.isSleepDataStale ? "--" : (sleepHours > 0 ? formatSleepHours(sleepHours) : "--"),
+                        status: hkManager.isSleepDataStale ? "No Data" : (sleepHours == 0 ? "No Data" : (sleepHours < 6.5 ? "Short" : "Normal")),
+                        color: hkManager.isSleepDataStale ? .gray : (sleepHours == 0 ? .gray : (sleepHours < 6.5 ? Theme.Colors.recoveryMid : Theme.Colors.recoveryHigh)),
+                        ratio: hkManager.isSleepDataStale ? 0.0 : (sleepHours == 0 ? 0.5 : min(1.0, max(0.0, (sleepHours - 4.0) / 6.0))),
                         iconName: "bed.double.fill"
                     )
                 }
@@ -1007,28 +966,20 @@ struct CircularGaugeView: View {
     var body: some View {
         VStack(spacing: 8) {
             ZStack {
-                // Soft 3D radial backglow
-                Circle()
-                    .fill(color.opacity(0.08))
-                    .frame(width: 76, height: 76)
-                    .blur(radius: 6)
-                
-                // Base ring shadow
+                // Base ring
                 Circle()
                     .stroke(color.opacity(0.12), lineWidth: 8)
                     .frame(width: 76, height: 76)
-                    .shadow(color: Color.black.opacity(0.35), radius: 2, x: 1, y: 1)
                 
-                // Trimmed progress ring with pop shadow
+                // Trimmed progress ring
                 Circle()
                     .trim(from: 0.0, to: CGFloat(min(1.0, max(0.0, progress))))
                     .stroke(
-                        AngularGradient(colors: [color.opacity(0.7), color], center: .center),
+                        color,
                         style: StrokeStyle(lineWidth: 8, lineCap: .round)
                     )
                     .frame(width: 76, height: 76)
                     .rotationEffect(.degrees(-90))
-                    .shadow(color: color.opacity(0.35), radius: 3, x: 0, y: 2)
                 
                 Text(value)
                     .font(Theme.Typography.roundedFont(size: 16, weight: .bold))
@@ -1044,8 +995,13 @@ struct CircularGaugeView: View {
                     Text(subtitle)
                         .font(Theme.Typography.tick)
                         .foregroundColor(.white.opacity(0.35))
+                } else {
+                    // Empty string block to ensure identical layout height for baseline alignment
+                    Text(" ")
+                        .font(Theme.Typography.tick)
                 }
             }
+            .frame(height: 30, alignment: .top)
         }
         .frame(maxWidth: .infinity)
     }
@@ -1378,14 +1334,14 @@ struct ActivenessScoreInfoSheet: View {
                             .font(Theme.Typography.cardTitle)
                             .foregroundColor(.white.opacity(0.4))
 
-                        // Gradient bar
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(LinearGradient(
-                                colors: [Theme.Colors.recoveryLow, Theme.Colors.strainHigh,
-                                         Theme.Colors.sleepDeep, Theme.Colors.recoveryHigh],
-                                startPoint: .leading, endPoint: .trailing
-                            ))
-                            .frame(height: 10)
+                        // Solid color segment bar (no gradients)
+                        HStack(spacing: 4) {
+                            ForEach([Theme.Colors.recoveryLow, Theme.Colors.strainHigh, Theme.Colors.sleepDeep, Theme.Colors.recoveryHigh], id: \.self) { color in
+                                RoundedRectangle(cornerRadius: 3)
+                                    .fill(color)
+                                    .frame(height: 10)
+                            }
+                        }
 
                         // Zone labels
                         HStack(spacing: 0) {

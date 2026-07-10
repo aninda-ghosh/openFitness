@@ -6,6 +6,31 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.4.0] — 2026-07-10
+
+### Added
+- **Stale Sleep Data Banner**: Added a visual warning banner at the top of `SleepDetailView` when no sleep data is recorded today, alerting the user that fallback/stale data from a previous day is shown.
+- **Solid Segmented Score Zones**: Replaced the continuous gradient bar under Dashboard's Score Zones with four clean, solid-color segment capsules.
+- **Interactive Swipe Back Gesture**: Restored native iOS interactive swipe-to-go-back gesture globally across hidden-navigation detail pages.
+
+### Changed
+- **Minimalist Pure Black & Solid Color Theme**: Removed all gradients, meshes, backglows, and radial shadows. Replaced app backgrounds with flat `Color.black` and progress/gauge rings and charts with solid colors and flat fills.
+- **Strict Vertical Scroll Lock**: Bound the inner VStack content of all 10 detail views and the main Dashboard to `.containerRelativeFrame(.horizontal)` to guarantee purely vertical scrolling and prevent any horizontal shifting.
+- **Dashboard Header Spacing**: Increased top spacing of the Dashboard header to 54pt to completely prevent status bar collisions on notched devices.
+- **Uniform Alignments**: Adjusted the horizontal padding on the Dashboard's "Daily summary" section from 20pt to 16pt to align perfectly with the other cards.
+- **AI Nudge Pipeline Refactoring**: Configured the dashboard nudge (`DailyPulse`) to run *after* metric sub-insights are generated, summarizing those sub-insights rather than using raw values.
+- **Detailed AI Metric Cards**: Moved `MetricInsightCard` from the top of the metric pages to the bottom of all 8 detail views.
+- **Robust Background Data and AI Sync**: Shifted `BGAppRefreshTask` and HealthKit updates to trigger a complete HealthKit data fetch via `fetchAllMetrics()` to sync data and pre-warm AI insights in the background.
+- **Stale Sleep AI Guard**: Configured the facts model to supply empty sleep context when `isSleepDataStale` is true, aligning the AI summary with the dashboard's `N/A` state.
+- **Energy Bank Layout Improvements**: Refactored the statistics pill row to be flexible and restricted options of the segmented picker to [.day, .week, .month, .sixMonths, .year] to match the other pages.
+- **Dashboard Daily Summary Section Text**: Removed the daily summary header title and summary text entirely, displaying the circular gauges directly below the Hero Card.
+
+### Removed
+- **ECG & Sensor Waveforms**: Removed the ECG card, detail sheets, alerts, and state management variables from the Dashboard.
+- **Dashboard AI Nudge bubble**: Removed the dashboard DailyPulseCard as requested.
+
+---
+
 ## [0.3.0] — 2026-06-09
 
 ### Added

@@ -270,10 +270,6 @@ struct ActivityDetailView: View {
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 20) {
 
-                        MetricInsightCard(metric: .activity, hkManager: hkManager)
-                            .padding(.horizontal)
-                            .padding(.top, 10)
-
                         // Tab Selector
                         HStack(spacing: 12) {
                             Button(action: {
@@ -329,7 +325,7 @@ struct ActivityDetailView: View {
                                 Circle()
                                     .trim(from: 0.0, to: CGFloat(min(1.0, currentVal / goalValue)))
                                     .stroke(
-                                        LinearGradient(colors: [statusColor, statusColor.opacity(0.6)], startPoint: .top, endPoint: .bottom),
+                                        statusColor,
                                         style: StrokeStyle(lineWidth: 6, lineCap: .round)
                                     )
                                     .frame(width: 64, height: 64)
@@ -454,7 +450,11 @@ struct ActivityDetailView: View {
                         }
                         .glassCard()
                         .padding(.horizontal)
+
+                        MetricInsightCard(metric: .activity, hkManager: hkManager)
+                            .padding(.horizontal)
                     }
+                    .containerRelativeFrame(.horizontal)
                     .padding(.bottom, 30)
                 }
             }

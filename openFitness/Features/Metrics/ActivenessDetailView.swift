@@ -212,9 +212,6 @@ struct ActivenessDetailView: View {
                             PeriodNavigationView(timeframe: .day, baseDate: $selectedDay, accentColor: Theme.Colors.strainHigh)
                         }
 
-                        MetricInsightCard(metric: .activeness, hkManager: hkManager)
-                            .padding(.horizontal)
-
                         // Hero Gauge
                         HStack(alignment: .center, spacing: 20) {
                             ZStack {
@@ -263,9 +260,7 @@ struct ActivenessDetailView: View {
                                             .fill(Color.white.opacity(0.08))
                                             .frame(height: 6)
                                         RoundedRectangle(cornerRadius: 4)
-                                            .fill(LinearGradient(
-                                                colors: [Theme.Colors.sleepDeep, Theme.Colors.recoveryHigh],
-                                                startPoint: .leading, endPoint: .trailing))
+                                            .fill(Theme.Colors.recoveryHigh)
                                             .frame(width: geo.size.width * CGFloat(displayedScore) / 100.0, height: 6)
                                     }
                                 }
@@ -373,7 +368,11 @@ struct ActivenessDetailView: View {
                         }
                         .glassCard()
                         .padding(.horizontal)
+
+                        MetricInsightCard(metric: .activeness, hkManager: hkManager)
+                            .padding(.horizontal)
                     }
+                    .containerRelativeFrame(.horizontal)
                     .padding(.bottom, 30)
                 }
             }

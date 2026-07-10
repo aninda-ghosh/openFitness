@@ -232,15 +232,29 @@ struct SleepDetailView: View {
                         baseDate: selectedTimeframe == .day ? $selectedDayDate : $baseDate,
                         accentColor: Theme.Colors.sleepDeep
                     )
-
-                    MetricInsightCard(metric: .sleep, hkManager: hkManager)
-                        .padding(.horizontal)
                     .onChange(of: selectedDayDate) { _, newDate in
                         if selectedTimeframe == .day && !calendar.isDateInToday(newDate) {
                             historicalDaySleepStages = hkManager.loadSleepStages(for: newDate)
                         } else {
                             historicalDaySleepStages = []
                         }
+                    }
+
+                    if isStaleLabelActive {
+                        HStack(spacing: 10) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundColor(.orange)
+                                .font(.system(size: 16))
+                            Text("No sleep data recorded today. Showing last recorded night (\(formatDate(hkManager.sleepDataDate))).")
+                                .font(Theme.Typography.roundedFont(size: 12, weight: .semibold))
+                                .foregroundColor(.white.opacity(0.8))
+                                .lineSpacing(3)
+                        }
+                        .padding(12)
+                        .background(Color.orange.opacity(0.1))
+                        .cornerRadius(10)
+                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.orange.opacity(0.3), lineWidth: 1))
+                        .padding(.horizontal)
                     }
 
                     // Compact Score Card
@@ -252,7 +266,7 @@ struct SleepDetailView: View {
                             Circle()
                                 .trim(from: 0, to: CGFloat(Double(displayScore) / 100.0))
                                 .stroke(
-                                    LinearGradient(colors: [Theme.Colors.sleepLight, Theme.Colors.sleepLight.opacity(0.6)], startPoint: .top, endPoint: .bottom),
+                                    Theme.Colors.sleepLight,
                                     style: StrokeStyle(lineWidth: 6, lineCap: .round)
                                 )
                                 .frame(width: 64, height: 64)
@@ -645,7 +659,11 @@ struct SleepDetailView: View {
                     }
                     .glassCard()
                     .padding(.horizontal)
+
+                    MetricInsightCard(metric: .sleep, hkManager: hkManager)
+                        .padding(.horizontal)
                 }
+                .containerRelativeFrame(.horizontal)
                 .padding(.bottom, 20)
             }
         }

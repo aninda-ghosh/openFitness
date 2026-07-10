@@ -373,9 +373,6 @@ struct StressHeartRateDetailView: View {
 
                     PeriodNavigationView(timeframe: .day, baseDate: $selectedDay, accentColor: Theme.Colors.recoveryMid)
 
-                    MetricInsightCard(metric: .stress, hkManager: hkManager)
-                        .padding(.horizontal)
-
                     // Compact Score Card
                     HStack(spacing: 18) {
                         ZStack {
@@ -386,7 +383,7 @@ struct StressHeartRateDetailView: View {
                             Circle()
                                 .trim(from: 0.0, to: CGFloat(Double(displayStress) / 100.0))
                                 .stroke(
-                                    LinearGradient(colors: [stressColor, stressColor.opacity(0.6)], startPoint: .top, endPoint: .bottom),
+                                    stressColor,
                                     style: StrokeStyle(lineWidth: 6, lineCap: .round)
                                 )
                                 .frame(width: 64, height: 64)
@@ -718,7 +715,11 @@ struct StressHeartRateDetailView: View {
                     }
                     .glassCard()
                     .padding(.horizontal)
+
+                    MetricInsightCard(metric: .stress, hkManager: hkManager)
+                        .padding(.horizontal)
                 }
+                .containerRelativeFrame(.horizontal)
                 .padding(.bottom, 30)
             }
         }

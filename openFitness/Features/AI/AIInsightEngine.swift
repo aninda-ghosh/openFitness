@@ -72,8 +72,12 @@ final class AIInsightEngine {
         let pulse: DailyPulse
     }
 
-    private static let pulseCacheKey = "ai.dailyPulse.cache.v3"
+    private struct CachedInsight: Codable {
+        let day: String
+        let insight: MetricInsight
+    }
 
+    private static let pulseCacheKey = "ai.dailyPulse.cache.v3"
     private static let factualOptions = GenerationOptions(sampling: .greedy)
 
     // MARK: Daily pulse
@@ -110,25 +114,39 @@ final class AIInsightEngine {
             stance = "They are having a good day: celebrate it briefly and encourage them to keep it up."
         }
 
-        let context = """
+        // Gather all generated sub-insight summaries for today to summarize them on the dashboard
+        var subInsightSummaries: [String] = []
+        let metricsToSummarize: [InsightMetric] = [.recovery, .sleep, .strain, .stress]
+        for metric in metricsToSummarize {
+            let userDefaultsKey = "ai.metricInsight.\(metric.rawValue).cache"
+            if let data = UserDefaults.standard.data(forKey: userDefaultsKey),
+               let cached = try? JSONDecoder().decode(CachedInsight.self, from: data),
+               cached.day == day {
+                subInsightSummaries.append("\(metric.displayName): \(cached.insight.summary)")
+            }
+        }
+
+        let context = subInsightSummaries.isEmpty ? """
             Recovery \(hk.todayRecovery)%, strain \(AIToolFormat.num(hk.todayStrain)) of 21, \
             sleep \(AIToolFormat.num(hk.todaySleepHours))h (score \(hk.todaySleepScore)%), \
             \(hk.todaySteps) steps, \(Int(hk.todayActiveCalories)) active kcal, \
             energy bank \(hk.energyBank)%, stress \(hk.todayStressAverage) of 100
-            """
+            """ : subInsightSummaries.joined(separator: "\n")
 
         let session = LanguageModelSession(instructions: """
             You write one short nudge for the dashboard of a fitness tracking app. \
             At most two sentences and 35 words in total. Warm and specific: cite one or \
-            two numbers from the data, give exactly one piece of advice, and never \
-            contradict the guidance you are given. Plain text only - no markdown, no \
+            two numbers from the summaries or metrics provided, give exactly one piece of advice, \
+            and never contradict the guidance you are given. Plain text only - no markdown, no \
             emoji, no medical advice.
             """)
 
         let prompt = """
-            It is \(timeOfDay). The user's metrics today: \(context).
+            It is \(timeOfDay). Summaries of the user's detailed health insights today:
+            \(context)
+
             Guidance: \(stance)
-            Write the nudge.
+            Write the nudge summarizing these insights.
             """
 
         let pulse = try await session.respond(
@@ -146,10 +164,64 @@ final class AIInsightEngine {
     // MARK: Metric deep-dive insight
 
     /// "What happened and how to improve" for one metric, cached per metric per day.
+    func hasCachedInsight(for metric: InsightMetric) -> Bool {
+        let day = Self.dayString(Date())
+        let cacheKey = "\(metric.rawValue)-\(day)"
+        if metricCache[cacheKey] != nil {
+            return true
+        }
+        let userDefaultsKey = "ai.metricInsight.\(metric.rawValue).cache"
+        if let data = UserDefaults.standard.data(forKey: userDefaultsKey),
+           let cached = try? JSONDecoder().decode(CachedInsight.self, from: data),
+           cached.day == day {
+            return true
+        }
+        return false
+    }
+
+    func prewarmInsights(hkManager: HealthKitManager) async {
+        guard Self.isAvailable else { return }
+        
+        let metrics: [InsightMetric] = [.recovery, .sleep, .strain, .stress, .activity, .energy, .vitals, .activeness, .workouts]
+        for metric in metrics {
+            if hasCachedInsight(for: metric) {
+                continue
+            }
+            
+            do {
+                _ = try await self.metricInsight(for: metric, hkManager: hkManager)
+                // Yield thread execution for 1 second to let user actions run on main thread smoothly
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+            } catch {
+                print("AIInsightEngine: Failed to prewarm \(metric.rawValue) insight: \(error)")
+            }
+        }
+
+        // After generating all metric insights, prewarm the Daily Pulse nudge!
+        do {
+            _ = try await self.dailyPulse(using: hkManager)
+        } catch {
+            print("AIInsightEngine: Failed to prewarm Daily Pulse: \(error)")
+        }
+    }
+
+    /// "What happened and how to improve" for one metric, cached per metric per day.
     func metricInsight(for metric: InsightMetric, hkManager: HealthKitManager) async throws -> MetricInsight {
         let cacheKey = "\(metric.rawValue)-\(Self.dayString(Date()))"
+        let day = Self.dayString(Date())
+        
+        // 1. Check in-memory cache
         if let cached = metricCache[cacheKey] {
             return cached
+        }
+
+        // 2. Check UserDefaults cache
+        let userDefaultsKey = "ai.metricInsight.\(metric.rawValue).cache"
+        if let data = UserDefaults.standard.data(forKey: userDefaultsKey),
+           let cached = try? JSONDecoder().decode(CachedInsight.self, from: data),
+           cached.day == day {
+            metricCache[cacheKey] = cached.insight
+            return cached.insight
         }
 
         let session = LanguageModelSession(instructions: """
@@ -175,7 +247,13 @@ final class AIInsightEngine {
             generating: MetricInsight.self,
             options: Self.factualOptions
         ).content
+        
         metricCache[cacheKey] = insight
+        
+        if let data = try? JSONEncoder().encode(CachedInsight(day: day, insight: insight)) {
+            UserDefaults.standard.set(data, forKey: userDefaultsKey)
+        }
+        
         return insight
     }
 
@@ -198,13 +276,21 @@ final class AIInsightEngine {
             lines.append(compare(hk.todayHRV, baseline.avgOptional(\.hrv), "HRV", unit: "ms"))
             lines.append(compare(hk.todayRHR, baseline.avgOptional(\.rhr), "Resting heart rate", unit: "bpm", decimals: 0))
             lines.append("Higher HRV and lower resting heart rate mean better recovery.")
-            lines.append("Last night's sleep: \(AIToolFormat.num(hk.todaySleepHours))h of \(AIToolFormat.num(hk.todaySleepNeeded))h needed, sleep score \(hk.todaySleepScore)%.")
+            if hk.isSleepDataStale {
+                lines.append("Last night's sleep: No sleep data recorded today (watch not worn).")
+            } else {
+                lines.append("Last night's sleep: \(AIToolFormat.num(hk.todaySleepHours))h of \(AIToolFormat.num(hk.todaySleepNeeded))h needed, sleep score \(hk.todaySleepScore)%.")
+            }
         case .sleep:
-            let deficit = hk.todaySleepNeeded - hk.todaySleepHours
-            lines.append("Slept \(AIToolFormat.num(hk.todaySleepHours))h of \(AIToolFormat.num(hk.todaySleepNeeded))h needed" +
-                         (deficit > 0.25 ? " - a deficit of \(AIToolFormat.num(deficit))h." : " - need was met."))
-            lines.append(compare(Double(hk.todaySleepScore), baseline.avg(\.sleepScore), "Sleep score", unit: "%", decimals: 0))
-            lines.append("Deep sleep \(Int(hk.todayDeepMinutes))min, REM sleep \(Int(hk.todayRemMinutes))min.")
+            if hk.isSleepDataStale {
+                lines.append("CRITICAL: There is no sleep data recorded today. The user did not wear their watch.")
+            } else {
+                let deficit = hk.todaySleepNeeded - hk.todaySleepHours
+                lines.append("Slept \(AIToolFormat.num(hk.todaySleepHours))h of \(AIToolFormat.num(hk.todaySleepNeeded))h needed" +
+                             (deficit > 0.25 ? " - a deficit of \(AIToolFormat.num(deficit))h." : " - need was met."))
+                lines.append(compare(Double(hk.todaySleepScore), baseline.avg(\.sleepScore), "Sleep score", unit: "%", decimals: 0))
+                lines.append("Deep sleep \(Int(hk.todayDeepMinutes))min, REM sleep \(Int(hk.todayRemMinutes))min.")
+            }
             if let avgSleep = baseline.avgOptional(\.sleepDuration) {
                 lines.append("7-day average sleep duration: \(AIToolFormat.num(avgSleep))h.")
             }
@@ -222,14 +308,22 @@ final class AIInsightEngine {
             lines.append("Today's stress ranged from \(hk.todayStressLowest) to \(hk.todayStressHighest).")
             lines.append(compare(hk.todayHRV, baseline.avgOptional(\.hrv), "HRV", unit: "ms"))
             lines.append("Lower HRV usually accompanies higher stress.")
-            lines.append("Last night's sleep: \(AIToolFormat.num(hk.todaySleepHours))h, score \(hk.todaySleepScore)%.")
+            if hk.isSleepDataStale {
+                lines.append("Last night's sleep: No sleep data recorded today.")
+            } else {
+                lines.append("Last night's sleep: \(AIToolFormat.num(hk.todaySleepHours))h, score \(hk.todaySleepScore)%.")
+            }
         case .activity:
             lines.append(compare(Double(hk.todaySteps), baseline.avgDouble { Double($0.steps) }, "Steps", unit: "", decimals: 0))
             lines.append(compare(hk.todayActiveCalories, baseline.avg(\.activeCalories), "Active calories", unit: " kcal", decimals: 0))
             lines.append("Strain today: \(AIToolFormat.num(hk.todayStrain)) of 21. Energy bank: \(hk.energyBank)%.")
         case .energy:
             lines.append("Energy bank is at \(hk.energyBank)%; the day started at \(hk.energyBankStart)%.")
-            lines.append("Charged \(hk.energyBankCharged)% so far today (\(hk.energyBankSleepCharge)% of it from sleep) and drained \(hk.energyBankDrained)%.")
+            if hk.isSleepDataStale {
+                lines.append("Charged \(hk.energyBankCharged)% today (no sleep charge because watch was not worn) and drained \(hk.energyBankDrained)%.")
+            } else {
+                lines.append("Charged \(hk.energyBankCharged)% so far today (\(hk.energyBankSleepCharge)% of it from sleep) and drained \(hk.energyBankDrained)%.")
+            }
             lines.append("Recovery \(hk.todayRecovery)%, strain \(AIToolFormat.num(hk.todayStrain)) of 21, sleep \(AIToolFormat.num(hk.todaySleepHours))h.")
         case .vitals:
             lines.append(compare(hk.todayRespiratoryRate, baseline.avgOptional(\.respiratoryRate), "Respiratory rate", unit: " breaths/min"))

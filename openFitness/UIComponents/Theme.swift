@@ -70,24 +70,8 @@ struct AppBackground: View {
     var accent: Color = Theme.Colors.recoveryHigh
 
     var body: some View {
-        let base = Color(red: 0.025, green: 0.03, blue: 0.05)
-        let lift = Color(red: 0.05, green: 0.06, blue: 0.10)
-        let wash = accent.mix(with: base, by: 0.86)
-
-        MeshGradient(
-            width: 3, height: 3,
-            points: [
-                [0, 0], [0.5, 0], [1, 0],
-                [0, 0.5], [0.5, 0.5], [1, 0.5],
-                [0, 1], [0.5, 1], [1, 1]
-            ],
-            colors: [
-                wash, lift, base,
-                base, base, lift,
-                base, lift, base
-            ]
-        )
-        .ignoresSafeArea()
+        Color.black
+            .ignoresSafeArea()
     }
 }
 

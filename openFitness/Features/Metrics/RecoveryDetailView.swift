@@ -203,9 +203,6 @@ struct RecoveryDetailView: View {
 
                     PeriodNavigationView(timeframe: .day, baseDate: $selectedDay, accentColor: Theme.Colors.recoveryHigh)
 
-                    MetricInsightCard(metric: .recovery, hkManager: hkManager)
-                        .padding(.horizontal)
-
                     // Compact Score Card
                     HStack(spacing: 18) {
                         ZStack {
@@ -216,7 +213,7 @@ struct RecoveryDetailView: View {
                             Circle()
                                 .trim(from: 0.0, to: CGFloat(Double(displayScore) / 100.0))
                                 .stroke(
-                                    LinearGradient(colors: [scoreColor, scoreColor.opacity(0.6)], startPoint: .top, endPoint: .bottom),
+                                    scoreColor,
                                     style: StrokeStyle(lineWidth: 6, lineCap: .round)
                                 )
                                 .frame(width: 64, height: 64)
@@ -345,7 +342,7 @@ struct RecoveryDetailView: View {
                                 let endX = geo.size.width * CGFloat(strainTarget.high / 21.0)
 
                                 Capsule()
-                                    .fill(LinearGradient(colors: [Theme.Colors.strainLow, Theme.Colors.strainHigh], startPoint: .leading, endPoint: .trailing))
+                                    .fill(Theme.Colors.strainHigh)
                                     .frame(width: max(10, endX - startX), height: 8)
                                     .offset(x: startX)
                             }
@@ -500,7 +497,11 @@ struct RecoveryDetailView: View {
                     }
                     .glassCard()
                     .padding(.horizontal)
+
+                    MetricInsightCard(metric: .recovery, hkManager: hkManager)
+                        .padding(.horizontal)
                 }
+                .containerRelativeFrame(.horizontal)
                 .padding(.bottom, 30)
             }
         }

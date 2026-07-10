@@ -394,9 +394,6 @@ struct VitalsDetailView: View {
 
                         PeriodNavigationView(timeframe: .day, baseDate: $selectedDay, accentColor: Theme.Colors.sleepLight)
 
-                        MetricInsightCard(metric: .vitals, hkManager: hkManager)
-                            .padding(.horizontal)
-
                         // Hero Value Card
                         HStack(spacing: 18) {
                             ZStack {
@@ -407,7 +404,7 @@ struct VitalsDetailView: View {
                                 Circle()
                                     .trim(from: 0.0, to: 0.8)
                                     .stroke(
-                                        LinearGradient(colors: [statusColor, statusColor.opacity(0.6)], startPoint: .top, endPoint: .bottom),
+                                        statusColor,
                                         style: StrokeStyle(lineWidth: 6, lineCap: .round)
                                     )
                                     .frame(width: 64, height: 64)
@@ -540,7 +537,11 @@ struct VitalsDetailView: View {
                         }
                         .glassCard()
                         .padding(.horizontal)
+
+                        MetricInsightCard(metric: .vitals, hkManager: hkManager)
+                            .padding(.horizontal)
                     }
+                    .containerRelativeFrame(.horizontal)
                     .padding(.bottom, 30)
                 }
             }

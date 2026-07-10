@@ -508,10 +508,10 @@ struct CustomLineGraph: View {
                             .fill(lineColor.opacity(0.08))
                     }
                     
-                    // 3. Area Gradient Fill
-                    if let gradColors = gradientColors {
+                    // 3. Solid Area Fill (No Gradients)
+                    if gradientColors != nil {
                         fillPath
-                            .fill(LinearGradient(colors: gradColors, startPoint: .top, endPoint: .bottom))
+                            .fill(lineColor.opacity(0.12))
                     }
                     
                     // 4. Line stroke
